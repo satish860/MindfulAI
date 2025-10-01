@@ -1,35 +1,46 @@
 import type { MDXComponents } from 'mdx/types'
+import { CodeBlock } from './app/components/CodeBlock'
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
     // Customize MDX components here
-    h1: ({ children }) => (
-      <h1 className="font-serif text-4xl font-semibold mb-6 text-gray-900">
-        {children}
-      </h1>
-    ),
-    h2: ({ children }) => (
-      <h2 className="font-serif text-3xl font-semibold mt-12 mb-4 text-gray-900">
-        {children}
-      </h2>
-    ),
-    h3: ({ children }) => (
-      <h3 className="font-serif text-2xl font-semibold mt-8 mb-3 text-gray-900">
-        {children}
-      </h3>
-    ),
-    p: ({ children }) => (
-      <p className="mb-6 leading-relaxed text-gray-700">
-        {children}
-      </p>
-    ),
-    blockquote: ({ children }) => (
-      <blockquote className="border-l-4 border-sage-light pl-6 py-4 my-8 bg-white rounded-r-lg shadow-sm">
-        {children}
-      </blockquote>
-    ),
-    code: ({ children }) => (
-      <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+    h1: ({ children }) => <h1>{children}</h1>,
+    h2: ({ children }) => <h2>{children}</h2>,
+    h3: ({ children }) => <h3>{children}</h3>,
+    h4: ({ children }) => <h4>{children}</h4>,
+    p: ({ children }) => <p>{children}</p>,
+    blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+    pre: ({ children, ...props }: any) => {
+      // Extract language from className
+      const childProps = children?.props
+      const className = childProps?.className || ''
+      const language = className.replace('language-', '')
+
+      // Extract code string from children
+      const codeString = childProps?.children || ''
+
+      // Map language codes to display names
+      const languageMap: Record<string, string> = {
+        'javascript': 'JavaScript',
+        'typescript': 'TypeScript',
+        'python': 'Python',
+        'jsx': 'JSX',
+        'tsx': 'TSX',
+        'json': 'JSON',
+        'bash': 'Bash',
+        'shell': 'Shell',
+      }
+
+      const title = languageMap[language] || language.toUpperCase()
+
+      return (
+        <CodeBlock title={title} language={language} code={codeString}>
+          {children}
+        </CodeBlock>
+      )
+    },
+    code: ({ children, ...props }) => (
+      <code {...props}>
         {children}
       </code>
     ),

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getArticleBySlug, getArticleSlugs } from '@/lib/articles'
 import { ThemeSwitcher } from '@/app/components/ThemeSwitcher'
 import { MDXRemote } from 'next-mdx-remote/rsc'
+import { useMDXComponents } from '@/mdx-components'
 
 export async function generateStaticParams() {
   const slugs = getArticleSlugs()
@@ -68,7 +69,7 @@ export default function ArticlePage({ params }: { params: { slug: string } }) {
           </header>
 
           <div className="article-content">
-            <MDXRemote source={article.content} />
+            <MDXRemote source={article.content} components={useMDXComponents({})} />
           </div>
 
           <footer className="article-footer">

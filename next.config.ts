@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
 };
 
+// Note: Turbopack has limitations with rehype/remark plugins
+// Syntax highlighting will be handled via CSS and client-side libraries
 const withMDX = createMDX({
-  // Add markdown plugins here, as desired
   options: {
     remarkPlugins: [],
     rehypePlugins: [],
