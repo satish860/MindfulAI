@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
@@ -12,6 +12,7 @@ interface CodeBlockProps {
 }
 
 export function CodeBlock({ children, title, language, code }: CodeBlockProps) {
+  const [copied, setCopied] = useState(false)
   const displayTitle = title || (language ? `${language.toUpperCase()}` : 'Code')
 
   // Extract code string from children
@@ -27,9 +28,28 @@ export function CodeBlock({ children, title, language, code }: CodeBlockProps) {
         .join('')
         .trim())
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeString)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy code:', err)
+    }
+  }
+
   return (
     <div className="code-block">
-      <div className="code-header">{displayTitle}</div>
+      <div className="code-header">
+        <span>{displayTitle}</span>
+        <button
+          onClick={handleCopy}
+          className="copy-button"
+          aria-label="Copy code to clipboard"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
       <SyntaxHighlighter
         language={language || 'javascript'}
         style={vscDarkPlus}
