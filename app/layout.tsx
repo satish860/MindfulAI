@@ -28,13 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        style={{
-          fontFamily: `${inter.style.fontFamily}, -apple-system, BlinkMacSystemFont, sans-serif`,
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-        }}
-      >
+      <body className={`${inter.variable} ${crimsonText.variable}`}>
         <ThemeProvider>
           {children}
         </ThemeProvider>
