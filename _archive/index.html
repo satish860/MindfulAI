@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindful AI - A Zen Approach to Technology</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #FAFAF8;
+            --text-primary: #2C3E50;
+            --text-secondary: #5A6C7D;
+            --accent-sage: #7C9885;
+            --accent-light: #A8BFA8;
+            --border-light: #E8E8E8;
+            --shadow-soft: rgba(44, 62, 80, 0.08);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 300;
+            line-height: 1.7;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        header {
+            padding: 4rem 0 3rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: 4rem;
+        }
+
+        h1 {
+            font-family: 'Crimson Text', Georgia, serif;
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .tagline {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            font-style: italic;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.95rem;
+            color: var(--accent-sage);
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .articles {
+            display: grid;
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        article {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px var(--shadow-soft);
+            transition: var(--transition);
+            overflow: hidden;
+        }
+
+        article:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(44, 62, 80, 0.12);
+        }
+
+        .article-content {
+            padding: 2.5rem;
+        }
+
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .reading-time {
+            color: var(--accent-sage);
+        }
+
+        .article-meta::before {
+            content: "";
+            width: 30px;
+            height: 1px;
+            background: var(--accent-light);
+        }
+
+        h2 {
+            font-family: 'Crimson Text', Georgia, serif;
+            font-size: 1.8rem;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .article-excerpt {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+
+        .read-more {
+            display: inline-flex;
+            align-items: center;
+            color: var(--accent-sage);
+            text-decoration: none;
+            font-weight: 400;
+            transition: var(--transition);
+            font-size: 0.95rem;
+        }
+
+        .read-more:hover {
+            color: var(--text-primary);
+            transform: translateX(3px);
+        }
+
+        .read-more::after {
+            content: " →";
+            margin-left: 0.5rem;
+            transition: var(--transition);
+        }
+
+        .read-more:hover::after {
+            margin-left: 0.8rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            border-top: 1px solid var(--border-light);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 0 1.5rem;
+            }
+
+            header {
+                padding: 3rem 0 2rem;
+                margin-bottom: 3rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .article-content {
+                padding: 2rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            .articles {
+                gap: 2rem;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Theme Switcher Styles */
+        .theme-switcher {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+        }
+
+        .theme-switcher select {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            box-shadow: 0 2px 8px var(--shadow-soft);
+            transition: var(--transition);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235A6C7D' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+        }
+
+        .theme-switcher select:hover {
+            border-color: var(--accent-sage);
+            box-shadow: 0 4px 12px var(--shadow-soft);
+        }
+
+        .theme-switcher select:focus {
+            outline: none;
+            border-color: var(--accent-sage);
+        }
+
+        @media (max-width: 640px) {
+            .theme-switcher {
+                top: 0.5rem;
+                right: 0.5rem;
+            }
+
+            .theme-switcher select {
+                font-size: 0.8rem;
+                padding: 0.4rem 1.75rem 0.4rem 0.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-switcher">
+        <select id="themeSelector" aria-label="Select color theme">
+            <option value="current">Current Theme</option>
+            <option value="earth">Earth Tones</option>
+            <option value="water">Muted Blues</option>
+            <option value="stone">Stone Garden</option>
+            <option value="tea">Tea Ceremony</option>
+            <option value="sakura">Cherry Blossom</option>
+            <option value="moss">Moss & Stone</option>
+        </select>
+    </div>
+    <div class="container">
+        <header>
+            <h1>Mindful AI</h1>
+            <p class="tagline">A thoughtful exploration of artificial intelligence</p>
+            <p class="subtitle">Technology • Philosophy • Future</p>
+        </header>
+
+        <main class="articles">
+            <article>
+                <div class="article-content">
+                    <div class="article-meta">
+                        <time datetime="2025-09-29">September 29, 2025</time>
+                        <span class="reading-time">5 min read</span>
+                    </div>
+                    <h2>The Art of Prompt Engineering: Finding Clarity in Conversation</h2>
+                    <p class="article-excerpt">
+                        Like the careful arrangement of stones in a Japanese garden, effective prompt engineering requires patience, intention, and an understanding of balance. Each word carries weight, each instruction creates ripples through the vast ocean of artificial intelligence.
+                    </p>
+                    <a href="#" class="read-more">Continue reading</a>
+                </div>
+            </article>
+
+            <article>
+                <div class="article-content">
+                    <div class="article-meta">
+                        <time datetime="2025-09-25">September 25, 2025</time>
+                        <span class="reading-time">7 min read</span>
+                    </div>
+                    <h2>Embracing Imperfection: What AI Can Learn from Wabi-Sabi</h2>
+                    <p class="article-excerpt">
+                        In the pursuit of perfect algorithms, we sometimes forget the beauty of imperfection. The Japanese philosophy of wabi-sabi teaches us to find grace in the incomplete, the impermanent, and the imperfect - lessons that could reshape how we approach artificial intelligence.
+                    </p>
+                    <a href="#" class="read-more">Continue reading</a>
+                </div>
+            </article>
+
+            <article>
+                <div class="article-content">
+                    <div class="article-meta">
+                        <time datetime="2025-09-20">September 20, 2025</time>
+                        <span class="reading-time">4 min read</span>
+                    </div>
+                    <h2>Digital Meditation: Finding Peace in the Age of AI</h2>
+                    <p class="article-excerpt">
+                        As artificial intelligence accelerates the pace of change in our world, the ancient practice of mindfulness becomes more relevant than ever. How do we maintain our center while riding the waves of technological transformation?
+                    </p>
+                    <a href="#" class="read-more">Continue reading</a>
+                </div>
+            </article>
+
+            <article>
+                <div class="article-content">
+                    <div class="article-meta">
+                        <time datetime="2025-09-15">September 15, 2025</time>
+                        <span class="reading-time">6 min read</span>
+                    </div>
+                    <h2>The Beginner's Mind: Approaching AI with Shoshin</h2>
+                    <p class="article-excerpt">
+                        "In the beginner's mind there are many possibilities, but in the expert's mind there are few." Suzuki Roshi's wisdom on Shoshin offers profound insights for anyone working with or thinking about artificial intelligence.
+                    </p>
+                    <a href="#" class="read-more">Continue reading</a>
+                </div>
+            </article>
+        </main>
+
+        <footer>
+            <p>Cultivating wisdom in the digital age</p>
+        </footer>
+    </div>
+
+    <script>
+        // Theme definitions
+        const themes = {
+            current: {
+                '--bg-primary': '#FAFAF8',
+                '--text-primary': '#2C3E50',
+                '--text-secondary': '#5A6C7D',
+                '--accent-sage': '#7C9885',
+                '--accent-light': '#A8BFA8',
+                '--border-light': '#E8E8E8',
+                '--shadow-soft': 'rgba(44, 62, 80, 0.08)'
+            },
+            earth: {
+                '--bg-primary': '#F5F3EE',
+                '--text-primary': '#3D3935',
+                '--text-secondary': '#7C756D',
+                '--accent-sage': '#9B8B7E',
+                '--accent-light': '#C4B8A9',
+                '--border-light': '#E6E1D8',
+                '--shadow-soft': 'rgba(61, 57, 53, 0.08)'
+            },
+            water: {
+                '--bg-primary': '#F8F9FA',
+                '--text-primary': '#2E3E4E',
+                '--text-secondary': '#5F6F7F',
+                '--accent-sage': '#6B8E9E',
+                '--accent-light': '#9FB8C3',
+                '--border-light': '#E7ECEF',
+                '--shadow-soft': 'rgba(46, 62, 78, 0.08)'
+            },
+            stone: {
+                '--bg-primary': '#FAFAFA',
+                '--text-primary': '#2A2A2A',
+                '--text-secondary': '#5C5C5C',
+                '--accent-sage': '#7A7A7A',
+                '--accent-light': '#A8A8A8',
+                '--border-light': '#E5E5E5',
+                '--shadow-soft': 'rgba(42, 42, 42, 0.08)'
+            },
+            tea: {
+                '--bg-primary': '#FAF7F2',
+                '--text-primary': '#3A3530',
+                '--text-secondary': '#6B6358',
+                '--accent-sage': '#8B7E6A',
+                '--accent-light': '#B8AB96',
+                '--border-light': '#E9E4DC',
+                '--shadow-soft': 'rgba(58, 53, 48, 0.08)'
+            },
+            sakura: {
+                '--bg-primary': '#FBF9F7',
+                '--text-primary': '#2D3436',
+                '--text-secondary': '#636E72',
+                '--accent-sage': '#C9A5A0',
+                '--accent-light': '#E3CCC8',
+                '--border-light': '#EFEAE7',
+                '--shadow-soft': 'rgba(45, 52, 54, 0.08)'
+            },
+            moss: {
+                '--bg-primary': '#F7F7F5',
+                '--text-primary': '#2C3E50',
+                '--text-secondary': '#5A6C7D',
+                '--accent-sage': '#6B8270',
+                '--accent-light': '#9CAA9A',
+                '--border-light': '#E5E7E3',
+                '--shadow-soft': 'rgba(44, 62, 80, 0.08)'
+            }
+        };
+
+        // Apply theme
+        function applyTheme(themeName) {
+            const theme = themes[themeName];
+            if (!theme) return;
+
+            const root = document.documentElement;
+            Object.keys(theme).forEach(property => {
+                root.style.setProperty(property, theme[property]);
+            });
+
+            // Save to localStorage
+            localStorage.setItem('selectedTheme', themeName);
+        }
+
+        // Load saved theme or default
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('selectedTheme') || 'current';
+            const selector = document.getElementById('themeSelector');
+            selector.value = savedTheme;
+            applyTheme(savedTheme);
+        }
+
+        // Theme selector event listener
+        document.getElementById('themeSelector').addEventListener('change', function(e) {
+            applyTheme(e.target.value);
+        });
+
+        // Load theme on page load
+        loadTheme();
+    </script>
+</body>
+</html>
