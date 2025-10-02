@@ -1,5 +1,6 @@
 import type { MDXComponents } from 'mdx/types'
 import { CodeBlock } from './app/components/CodeBlock'
+import { MermaidDiagram } from './app/components/MermaidDiagram'
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -18,6 +19,11 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
       // Extract code string from children
       const codeString = childProps?.children || ''
+
+      // Handle mermaid diagrams
+      if (language === 'mermaid') {
+        return <MermaidDiagram chart={codeString} />
+      }
 
       // Map language codes to display names
       const languageMap: Record<string, string> = {

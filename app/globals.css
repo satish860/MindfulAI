@@ -370,6 +370,65 @@ footer {
   font-style: normal;
 }
 
+/* Tables */
+.article-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2rem 0;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 15px var(--shadow-soft);
+}
+
+.article-content thead {
+  background: var(--accent-light);
+}
+
+.article-content th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--accent-sage);
+}
+
+.article-content td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+.article-content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.article-content tbody tr:hover {
+  background: rgba(124, 152, 133, 0.05);
+  transition: background 0.2s ease;
+}
+
+/* Mermaid diagrams */
+.article-content .mermaid {
+  margin: 2rem 0;
+  padding: 2rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 15px var(--shadow-soft);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+}
+
+.article-content .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Highlight boxes for standard articles */
 .article-article .highlight-box {
   background: white;
