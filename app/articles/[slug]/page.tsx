@@ -3,6 +3,7 @@ import { getArticleBySlug, getArticleSlugs } from '@/lib/articles'
 import { ThemeSwitcher } from '@/app/components/ThemeSwitcher'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { useMDXComponents } from '@/mdx-components'
+import remarkGfm from 'remark-gfm'
 
 export async function generateStaticParams() {
   const slugs = getArticleSlugs()
@@ -11,8 +12,9 @@ export async function generateStaticParams() {
   }))
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const article = getArticleBySlug(params.slug)
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const article = getArticleBySlug(slug)
 
   if (!article) {
     return {
@@ -26,8 +28,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
-export default function ArticlePage({ params }: { params: { slug: string } }) {
-  const article = getArticleBySlug(params.slug)
+export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const article = getArticleBySlug(slug)
 
   if (!article) {
     notFound()
@@ -69,7 +72,15 @@ export default function ArticlePage({ params }: { params: { slug: string } }) {
           </header>
 
           <div className="article-content">
-            <MDXRemote source={article.content} components={useMDXComponents({})} />
+            <MDXRemote
+              source={article.content}
+              components={useMDXComponents({})}
+              options={{
+                mdxOptions: {
+                  remarkPlugins: [remarkGfm],
+                }
+              }}
+            />
           </div>
 
           <footer className="article-footer">
