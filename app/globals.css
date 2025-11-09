@@ -1393,6 +1393,39 @@ html {
   color: var(--accent-sage);
 }
 
+/* Logo */
+.logo-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-sage);
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo-with-text {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo-text {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.site-header-with-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 0;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
 /* Accessibility */
 @media (prefers-reduced-motion: reduce) {
   * {

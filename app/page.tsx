@@ -1,4 +1,5 @@
 import { ThemeSwitcher } from './components/ThemeSwitcher'
+import { LogoWithText } from './components/Logo'
 import { getAllArticles } from '@/lib/articles'
 
 export default function Home() {
@@ -10,7 +11,7 @@ export default function Home() {
 
       <div className="container">
         <header>
-          <h1>Mindful AI</h1>
+          <LogoWithText size={48} />
           <p className="tagline">A thoughtful exploration of artificial intelligence</p>
           <p className="subtitle">Technology • Philosophy • Future</p>
         </header>

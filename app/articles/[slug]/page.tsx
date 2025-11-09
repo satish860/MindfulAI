@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getArticleBySlug, getArticleSlugs } from '@/lib/articles'
 import { ThemeSwitcher } from '@/app/components/ThemeSwitcher'
+import { Logo } from '@/app/components/Logo'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { getMDXComponents } from '@/mdx-components'
 import remarkGfm from 'remark-gfm'
@@ -23,9 +24,33 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     }
   }
 
+  const articleUrl = `https://themindfulai.dev/articles/${slug}`
+
   return {
-    title: `${article.metadata.title} | Mindful AI`,
+    title: article.metadata.title,
     description: article.metadata.excerpt,
+    keywords: article.metadata.category ? [article.metadata.category, "AI", "Technology", "Philosophy"] : ["AI", "Technology", "Philosophy"],
+    authors: [{ name: "The Mindful AI" }],
+    openGraph: {
+      type: "article",
+      locale: "en_US",
+      url: articleUrl,
+      title: article.metadata.title,
+      description: article.metadata.excerpt,
+      siteName: "The Mindful AI",
+      publishedTime: article.metadata.date,
+      authors: ["The Mindful AI"],
+      tags: article.metadata.category ? [article.metadata.category] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.metadata.title,
+      description: article.metadata.excerpt,
+      creator: "@themindfulai",
+    },
+    alternates: {
+      canonical: articleUrl,
+    },
   }
 }
 
@@ -48,13 +73,45 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const containerClass = template === 'short' ? 'container-short' : 'container-article'
   const articleClass = `article-page article-${template}`
 
+  // Structured data for SEO
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.metadata.title,
+    description: article.metadata.excerpt,
+    datePublished: article.metadata.date,
+    dateModified: article.metadata.date,
+    author: {
+      "@type": "Person",
+      name: "The Mindful AI",
+      url: "https://themindfulai.dev"
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "The Mindful AI",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://themindfulai.dev/logo.png"
+      }
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `https://themindfulai.dev/articles/${slug}`
+    }
+  }
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <ThemeSwitcher />
 
       <div className={`container ${containerClass}`}>
         <nav className="back-nav">
-          <Link href="/" className="back-link">
+          <Link href="/" className="back-link" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Logo size={24} />
             Back to home
           </Link>
         </nav>

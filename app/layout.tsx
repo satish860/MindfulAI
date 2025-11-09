@@ -17,8 +17,44 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Mindful AI - A thoughtful exploration of artificial intelligence",
-  description: "Exploring AI, philosophy, and technology with mindfulness",
+  title: {
+    default: "The Mindful AI - A thoughtful exploration of artificial intelligence",
+    template: "%s | The Mindful AI",
+  },
+  description: "Exploring AI, philosophy, and technology with mindfulness. Thoughtful articles on AI infrastructure, ethics, and the future of technology.",
+  keywords: ["AI", "Artificial Intelligence", "Philosophy", "Technology", "Mindfulness", "AI Infrastructure", "Ethics", "Machine Learning"],
+  authors: [{ name: "The Mindful AI" }],
+  creator: "The Mindful AI",
+  publisher: "The Mindful AI",
+  metadataBase: new URL("https://themindfulai.dev"),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://themindfulai.dev",
+    title: "The Mindful AI - A thoughtful exploration of artificial intelligence",
+    description: "Exploring AI, philosophy, and technology with mindfulness. Thoughtful articles on AI infrastructure, ethics, and the future of technology.",
+    siteName: "The Mindful AI",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "The Mindful AI - A thoughtful exploration of artificial intelligence",
+    description: "Exploring AI, philosophy, and technology with mindfulness. Thoughtful articles on AI infrastructure, ethics, and the future of technology.",
+    creator: "@themindfulai",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 };
 
 export default function RootLayout({
