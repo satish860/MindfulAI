@@ -1,14 +1,42 @@
 import type { MDXComponents } from 'mdx/types'
 import { CodeBlock } from './app/components/CodeBlock'
 import { MermaidDiagram } from './app/components/MermaidDiagram'
+import { InteractiveSandbox } from './app/components/InteractiveSandbox'
+import { SandboxTabs } from './app/components/SandboxTabs'
+
+// Helper function to generate slug from heading text
+function generateSlug(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+}
+
+// Helper component for headings with anchor links
+function Heading({ level, children }: { level: number; children: React.ReactNode }) {
+  const text = typeof children === 'string' ? children : String(children)
+  const slug = generateSlug(text)
+  const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements
+
+  return (
+    <HeadingTag id={slug} className="heading-anchor">
+      <a href={`#${slug}`} className="anchor-link">
+        {children}
+      </a>
+    </HeadingTag>
+  )
+}
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
     // Customize MDX components here
-    h1: ({ children }) => <h1>{children}</h1>,
-    h2: ({ children }) => <h2>{children}</h2>,
-    h3: ({ children }) => <h3>{children}</h3>,
-    h4: ({ children }) => <h4>{children}</h4>,
+    h1: ({ children }) => <Heading level={1}>{children}</Heading>,
+    h2: ({ children }) => <Heading level={2}>{children}</Heading>,
+    h3: ({ children }) => <Heading level={3}>{children}</Heading>,
+    h4: ({ children }) => <Heading level={4}>{children}</Heading>,
     p: ({ children }) => <p>{children}</p>,
     blockquote: ({ children }) => <blockquote>{children}</blockquote>,
     pre: ({ children, ...props }: any) => {
@@ -50,6 +78,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
         {children}
       </code>
     ),
+    InteractiveSandbox,
+    SandboxTabs,
     ...components,
   }
 }

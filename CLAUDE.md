@@ -11,30 +11,36 @@ This is a Next.js 15 blog website called "Mindful AI" - a thoughtful exploration
 The project uses Next.js App Router with MDX content management:
 
 ### Tech Stack
-- **Next.js 15.5.4** with Turbopack
+- **Next.js 15.5.4** (Turbopack disabled for remark-gfm compatibility)
 - **React 19.1.0**
 - **TypeScript 5**
 - **Vanilla CSS** with CSS custom properties and modern features
-- **MDX** (@next/mdx, @mdx-js/loader, @mdx-js/react)
+- **MDX** (@next/mdx, @mdx-js/loader, @mdx-js/react, next-mdx-remote)
 - **gray-matter** - YAML frontmatter parsing
 - **reading-time** - Automatic reading time calculation
+- **remark-gfm** - GitHub-flavored Markdown (tables, task lists, strikethrough)
+- **highlight.js** and **shiki** - Syntax highlighting for code blocks
+- **mermaid** - Diagram rendering support
 
 ### Directory Structure
 - **app/** - Next.js app router pages and components
   - **app/page.tsx** - Main landing page with article listings
   - **app/layout.tsx** - Root layout with font configuration and ThemeProvider
   - **app/globals.css** - Global styles with vanilla CSS and CSS custom properties
+  - **app/articles/[slug]/page.tsx** - Dynamic article page with MDXRemote rendering
   - **app/components/** - Reusable React components
     - **ArticleCard.tsx** - Article preview card component
     - **ThemeSwitcher.tsx** - Theme selection dropdown
+    - **CodeBlock.tsx** - Syntax-highlighted code block component
+    - **MermaidDiagram.tsx** - Client-side Mermaid diagram renderer
   - **app/providers/** - Context providers
     - **ThemeProvider.tsx** - Client-side theme management with localStorage
 - **content/articles/** - MDX article files with YAML frontmatter
 - **lib/** - Utility functions and shared logic
   - **lib/articles.ts** - Article fetching and metadata parsing
   - **lib/themes.ts** - Theme definitions and time-based theme logic
-- **mdx-components.tsx** - Custom MDX component overrides
-- **next.config.ts** - Next.js configuration with MDX support
+- **mdx-components.tsx** - Custom MDX component overrides (code blocks, Mermaid diagrams)
+- **next.config.mjs** - Next.js configuration with MDX and remark-gfm support
 
 ### Design System
 
@@ -62,6 +68,21 @@ All pages share a consistent design language with CSS custom properties:
 
 ## Article System
 
+### How Article Rendering Works
+
+The blog uses a two-stage MDX rendering approach:
+
+1. **Article Discovery** (`lib/articles.ts`):
+   - `getArticleSlugs()` scans `content/articles/` directory for `.mdx` files
+   - `getArticleBySlug(slug)` reads file, parses frontmatter with `gray-matter`, calculates reading time
+   - `getAllArticles()` fetches all articles sorted by date (newest first)
+
+2. **Article Rendering** (`app/articles/[slug]/page.tsx`):
+   - Uses Next.js dynamic routes with `generateStaticParams()` for static site generation
+   - Renders MDX with `next-mdx-remote` (server-side rendering)
+   - Applies `remark-gfm` plugin for GitHub-flavored Markdown features
+   - Passes custom components via `useMDXComponents()` for code blocks and diagrams
+
 ### MDX Article Format
 Articles are written in MDX (Markdown + JSX) with YAML frontmatter:
 
@@ -75,12 +96,12 @@ category: "Category Name"
 ---
 ```
 
-### Article Templates (Planned)
-- **Standard Article** - Clean, readable format for medium-length content (5-12 minute reads)
-- **Short Article** - Minimalist, centered layout for brief reflections (2-4 minute reads)
-- **Technical Article** - Comprehensive layout with TOC and code highlighting (10+ minute reads)
+### Article Templates (Implemented)
+- **Standard Article** (`template: "article"`) - Clean, readable format for medium-length content (5-12 minute reads)
+- **Short Article** (`template: "short"`) - Minimalist, centered layout for brief reflections (2-4 minute reads)
+- **Technical Article** (`template: "technical"`) - Comprehensive layout with code highlighting and Mermaid diagrams (10+ minute reads)
 
-Note: Template rendering is defined by the `template` frontmatter field but not yet fully implemented. Currently, all articles use the same layout.
+Template rendering is implemented in `app/articles/[slug]/page.tsx` and applies different CSS classes based on the `template` frontmatter field.
 
 ## Development Guidelines
 
@@ -108,7 +129,22 @@ npm run lint     # Run ESLint
 
 ### MDX Component Customization
 
-Custom MDX components can be defined in `mdx-components.tsx` to override default rendering of Markdown elements (headings, links, code blocks, etc.).
+Custom MDX components are defined in `mdx-components.tsx` and override default rendering:
+
+- **Code blocks** - Rendered with `CodeBlock` component (syntax highlighting via highlight.js/shiki)
+- **Mermaid diagrams** - Detected by `language-mermaid` class and rendered with `MermaidDiagram` component
+- **Tables** - Supported via `remark-gfm` plugin (GitHub-flavored Markdown)
+- **Headings, paragraphs, blockquotes** - Custom styling applied through component overrides
+
+To add Mermaid diagrams in articles:
+
+````mdx
+```mermaid
+graph TD
+  A[Start] --> B[Process]
+  B --> C[End]
+```
+````
 
 ### Adding Custom Components
 
@@ -167,11 +203,13 @@ The site includes a dynamic theme switcher with 7 Zen-inspired color palettes:
 
 ## Future Enhancements
 
-### Article Template System (In Progress)
-- Implement dynamic routing for article pages (`app/articles/[slug]/page.tsx`)
-- Create distinct layouts for `article`, `short`, and `technical` templates
-- Add table of contents for technical articles
-- Implement syntax highlighting for code blocks
+### Article Template System (Partially Complete)
+- ✓ Dynamic routing implemented (`app/articles/[slug]/page.tsx`)
+- ✓ Template-based CSS classes (`article-article`, `article-short`, `article-technical`)
+- ✓ Syntax highlighting for code blocks (highlight.js/shiki)
+- ✓ Mermaid diagram support
+- ⚠ Table of contents for technical articles (not yet implemented)
+- ⚠ Distinct layouts beyond CSS classes (could be enhanced)
 
 ### Planned Features
 - RSS feed generation

@@ -31,7 +31,11 @@ export default function Home() {
                     <time dateTime={article.date}>{formattedDate}</time>
                     <span className="reading-time">{article.readingTime}</span>
                   </div>
-                  <h2>{article.title}</h2>
+                  <h2>
+                    <a href={`/articles/${article.slug}`} className="article-title-link">
+                      {article.title}
+                    </a>
+                  </h2>
                   <p className="article-excerpt">{article.excerpt}</p>
                   <a href={`/articles/${article.slug}`} className="read-more">
                     Continue reading
