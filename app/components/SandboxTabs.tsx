@@ -70,7 +70,7 @@ export function SandboxTabs() {
   return (
     <div className="sandbox-tabs-container">
       <div className="sandbox-info-banner">
-        💡 <strong>These examples run on YOUR local sandbox.</strong> Make sure you've set up your local sandbox first (scroll up to "Try It Yourself First" section).
+        💡 <strong>These examples run on YOUR local sandbox.</strong> Make sure you&apos;ve set up your local sandbox first (scroll up to &quot;Try It Yourself First&quot; section).
       </div>
 
       <div className="sandbox-tabs">

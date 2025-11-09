@@ -21,7 +21,7 @@ export function CodeBlock({ children, title, language, code }: CodeBlockProps) {
     : React.Children.toArray(children)
         .map(child => {
           if (React.isValidElement(child)) {
-            return child.props?.children || ''
+            return (child.props as { children?: string })?.children || ''
           }
           return String(child)
         })

@@ -1,4 +1,5 @@
 import type { MDXComponents } from 'mdx/types'
+import React from 'react'
 import { CodeBlock } from './app/components/CodeBlock'
 import { MermaidDiagram } from './app/components/MermaidDiagram'
 import { InteractiveSandbox } from './app/components/InteractiveSandbox'
@@ -19,7 +20,7 @@ function generateSlug(text: string): string {
 function Heading({ level, children }: { level: number; children: React.ReactNode }) {
   const text = typeof children === 'string' ? children : String(children)
   const slug = generateSlug(text)
-  const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements
+  const HeadingTag = `h${level}` as keyof React.JSX.IntrinsicElements
 
   return (
     <HeadingTag id={slug} className="heading-anchor">
@@ -30,7 +31,8 @@ function Heading({ level, children }: { level: number; children: React.ReactNode
   )
 }
 
-export function useMDXComponents(components: MDXComponents): MDXComponents {
+// Non-hook version for use in async server components
+export function getMDXComponents(components: MDXComponents): MDXComponents {
   return {
     // Customize MDX components here
     h1: ({ children }) => <Heading level={1}>{children}</Heading>,
@@ -39,14 +41,14 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     h4: ({ children }) => <Heading level={4}>{children}</Heading>,
     p: ({ children }) => <p>{children}</p>,
     blockquote: ({ children }) => <blockquote>{children}</blockquote>,
-    pre: ({ children, ...props }: any) => {
+    pre: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
       // Extract language from className
-      const childProps = children?.props
-      const className = childProps?.className || ''
+      const childProps = React.isValidElement(children) ? children.props : null
+      const className = (childProps as { className?: string })?.className || ''
       const language = className.replace('language-', '')
 
       // Extract code string from children
-      const codeString = childProps?.children || ''
+      const codeString = (childProps as { children?: string })?.children || ''
 
       // Handle mermaid diagrams
       if (language === 'mermaid') {
@@ -83,3 +85,6 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ...components,
   }
 }
+
+// Alias for compatibility with MDX type system
+export const useMDXComponents = getMDXComponents

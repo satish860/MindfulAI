@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { getArticleBySlug, getArticleSlugs } from '@/lib/articles'
 import { ThemeSwitcher } from '@/app/components/ThemeSwitcher'
 import { MDXRemote } from 'next-mdx-remote/rsc'
-import { useMDXComponents } from '@/mdx-components'
+import { getMDXComponents } from '@/mdx-components'
 import remarkGfm from 'remark-gfm'
 
 export async function generateStaticParams() {
@@ -53,9 +54,9 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
 
       <div className={`container ${containerClass}`}>
         <nav className="back-nav">
-          <a href="/" className="back-link">
+          <Link href="/" className="back-link">
             Back to home
-          </a>
+          </Link>
         </nav>
 
         <article className={articleClass}>
@@ -74,7 +75,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           <div className="article-content">
             <MDXRemote
               source={article.content}
-              components={useMDXComponents({})}
+              components={getMDXComponents({})}
               options={{
                 mdxOptions: {
                   remarkPlugins: [remarkGfm],
