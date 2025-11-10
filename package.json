@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "generate-md": "node scripts/generate-markdown.js",
+    "prebuild": "npm run generate-md",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

@@ -1,0 +1,54 @@
+# Mindful AI Blog
+
+> A thoughtful exploration of artificial intelligence with a focus on philosophy, ethics, and mindful technology use.
+
+## About
+
+This blog explores the intersection of AI technology, philosophy, and mindful practices. All articles are available in clean Markdown format for efficient LLM consumption.
+
+## How to Use
+
+All articles are available as markdown files that can be directly fetched by LLMs:
+
+- **URL Pattern**: `/articles/[slug].md`
+- **Example**: `/articles/discovering-sandboxes-ai-infrastructure.md`
+- **Format**: Markdown with YAML frontmatter
+- **Encoding**: UTF-8
+
+## Available Articles
+
+### AI Infrastructure
+
+- [Discovering Sandboxes: The Infrastructure Behind AI's Future](/articles/discovering-sandboxes-ai-infrastructure.md)
+
+  Technical article exploring browser-based sandboxes, E2B infrastructure, security considerations, and implementation strategies for AI code execution environments.
+
+### AI Research & Tools
+
+- [How to Actually Evaluate AI Research Agents](/articles/how-to-evaluate-ai-research-agents.md)
+
+  Comprehensive guide to evaluating AI agents with research methodologies, quality metrics, and practical evaluation frameworks.
+
+## Content Structure
+
+Each markdown file includes:
+
+- **YAML Frontmatter**: title, date, excerpt, category, template
+- **Clean Markdown**: GitHub-flavored markdown with tables, code blocks
+- **Mermaid Diagrams**: Preserved as code blocks for rendering
+- **Interactive Components**: Converted to readable code examples
+
+## Technical Details
+
+- **Content-Type**: text/markdown; charset=utf-8
+- **Static Files**: Generated at build time for fast serving
+- **No JavaScript Required**: Pure markdown, works with all LLMs
+- **Updated**: Articles added continuously
+
+## License
+
+All content is available for AI training and research purposes. Please cite the source when using content from this blog.
+
+---
+
+*This file follows the llms.txt standard for making web content accessible to Large Language Models.*

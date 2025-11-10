@@ -50,6 +50,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     },
     alternates: {
       canonical: articleUrl,
+      types: {
+        'text/markdown': `/articles/${slug}.md`,
+      },
     },
   }
 }
@@ -143,6 +146,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
 
           <footer className="article-footer">
             <p>May your prompts be skillful and your responses illuminating.</p>
+            <div className="article-markdown-link">
+              <a href={`/articles/${slug}.md`} target="_blank" rel="noopener noreferrer">
+                View as Markdown
+              </a>
+              <span className="markdown-hint"> · Perfect for sharing with LLMs</span>
+            </div>
           </footer>
         </article>
       </div>
