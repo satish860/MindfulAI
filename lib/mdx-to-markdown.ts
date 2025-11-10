@@ -3,6 +3,13 @@
  * suitable for LLM consumption
  */
 
+interface TabData {
+  label?: string;
+  title?: string;
+  code?: string;
+  language?: string;
+}
+
 /**
  * Convert MDX content to plain Markdown by stripping/converting JSX components
  * while preserving standard Markdown features
@@ -33,9 +40,9 @@ export function mdxToMarkdown(mdxContent: string): string {
     (match, tabsJson, content) => {
       try {
         // Try to parse the tabs structure
-        const tabs = eval(`(${tabsJson})`);
+        const tabs = eval(`(${tabsJson})`) as TabData[];
         let result = '\n';
-        tabs.forEach((tab: any) => {
+        tabs.forEach((tab: TabData) => {
           result += `### ${tab.label || tab.title || 'Example'}\n\n`;
           if (tab.code) {
             const lang = tab.language || 'javascript';
@@ -43,7 +50,7 @@ export function mdxToMarkdown(mdxContent: string): string {
           }
         });
         return result;
-      } catch (e) {
+      } catch {
         // If parsing fails, just return the content
         return content;
       }
@@ -59,13 +66,13 @@ export function mdxToMarkdown(mdxContent: string): string {
 
   // Convert self-closing JSX components to text descriptions
   // Pattern: <ComponentName prop="value" />
-  markdown = markdown.replace(/<([A-Z][a-zA-Z0-9]*)[^>]*\/>/g, (match, componentName) => {
+  markdown = markdown.replace(/<([A-Z][a-zA-Z0-9]*)[^>]*\/>/g, (_match, componentName) => {
     return `[${componentName} component]`;
   });
 
   // Remove opening and closing tags of other JSX components
   // Pattern: <ComponentName ...> and </ComponentName>
-  markdown = markdown.replace(/<\/?([A-Z][a-zA-Z0-9]*)[^>]*>/g, (match, componentName) => {
+  markdown = markdown.replace(/<\/?([A-Z][a-zA-Z0-9]*)[^>]*>/g, () => {
     return ''; // Remove the tags but keep the content inside
   });
 
@@ -83,7 +90,7 @@ export function mdxToMarkdown(mdxContent: string): string {
  */
 export function addFrontmatter(
   markdown: string,
-  frontmatter: Record<string, any>
+  frontmatter: Record<string, unknown>
 ): string {
   const yamlLines = ['---'];
 
