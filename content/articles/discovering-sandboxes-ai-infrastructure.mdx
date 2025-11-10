@@ -1,7 +1,7 @@
 ---
-title: "Discovering Sandboxes: The Infrastructure Behind AI's Future"
+title: "Sandboxes: How AI Agents Safely Run Untrusted Code"
 date: "2025-11-08"
-excerpt: "I read Anthropic's article on AI agent efficiency and kept seeing 'sandbox' mentioned. I went deep to understand what it actually is. Here's what I discovered about the future of AI infrastructure."
+excerpt: "AI agents write code on-the-fly—code you've never seen before. How do you run it safely? I discovered why sandboxes are the critical infrastructure enabling Anthropic's 98.7% efficiency breakthrough."
 template: "article"
 category: "AI Infrastructure"
 ---
@@ -19,360 +19,171 @@ I was reading [Anthropic's recent article on code execution with MCP](https://ww
 
 The concept wasn't explained in detail. It was assumed knowledge. But clearly, it was *critical* to everything they were describing.
 
-So I went deep. I wanted to understand: What exactly *is* a sandbox? Why does it keep showing up in conversations about AI's future? And why does Anthropic—and increasingly, the entire industry—seem to believe this is foundational infrastructure?
+Then it hit me: **AI agents write code on-the-fly—code you've never reviewed. How do you run it safely?**
 
-Here's what I discovered. And why I believe sandboxes are as important to AI as containers were to cloud computing.
+This is fundamentally different from traditional computing. When you deploy your application in a container, you wrote (or at least reviewed) every line of code. You trust it. But AI agents? They generate custom code for each task, seconds before execution. You cannot review it. You cannot trust it by default.
+
+So I went deep. I wanted to understand: What exactly *is* a sandbox? Why does it solve the trust problem? And why does Anthropic—and increasingly, the entire industry—seem to believe this is foundational infrastructure?
+
+Here's what I discovered. And why sandboxes are the critical infrastructure enabling safe AI agent execution.
 
 ---
 
-## The Evolution of Compute Isolation: A Story
+## The Trust Spectrum: Understanding What Changed
 
-To understand sandboxes, you need to understand the journey of how we got here. It's a story about solving the same problem—how to safely run code—at different scales:
+To understand why sandboxes exist, you need to understand the question that changed everything: **Do you trust the code you're running?**
 
-```mermaid
-timeline
-    title The Evolution of Compute Isolation
-    1960s-1990s : Physical Machines
-                : One app per server
-                : Massive waste
-                : Minutes to provision
-    2000s : Virtual Machines
-          : Multiple VMs per server
-          : Full OS per VM
-          : Minutes to start
-    2010s : Containers / Docker
-          : Share OS kernel
-          : Lightweight isolation
-          : Seconds to start
-    2020s : Sandboxes
-          : Edge-native
-          : Serverless-first
-          : Milliseconds to start
-```
+Traditional infrastructure assumes you control the code. You write it, test it, deploy it. Even with containers—you're deploying *your* applications. The code is trusted because you created it.
 
-Each evolution solved the previous layer's problem while introducing new capabilities:
+AI agents broke this assumption. They generate code in real-time that you've never seen before. This isn't a deployment problem. It's a **trust problem**.
 
-**Physical Machines → Virtual Machines:** Solved hardware waste by running multiple isolated systems on one machine. But VMs were heavy (full OS each) and slow to start.
+### The Infrastructure That Already Existed
 
-**Virtual Machines → Containers:** Solved VM overhead by sharing the OS kernel. Containers start in seconds, not minutes. Enabled cloud-native development.
+By the 2010s, we had **two parallel solutions** for different problems:
 
-**Containers → Sandboxes:** Solving orchestration complexity and edge deployment. Sandboxes are serverless-first, globally distributed, and built for AI agent workloads.
+| **Containers (Docker, 2013)** | **Sandboxes (Bubblewrap, Chrome, 2010s)** |
+|-------------------------------|-------------------------------------------|
+| **Purpose:** Deploy YOUR apps | **Purpose:** Run UNTRUSTED code safely |
+| You wrote the Dockerfile | Assume code is hostile |
+| Long-running services | Ephemeral execution |
+| **Examples:** Docker, Kubernetes | **Examples:** Bubblewrap, Firejail, browser sandboxes |
+
+**These aren't sequential. They coexisted, solving different problems.**
+
+### What Changed in 2020s: AI Agents
+
+AI agents created a **NEW use case** for an OLD technology:
+
+**The challenge:** AI agents generate custom code for each task. You've never reviewed it. You need to run it safely.
+
+**The solution:** Sandboxes—technology that was ALREADY designed for untrusted code.
+
+**Anthropic's breakthrough:** Using sandboxes for AI-generated code execution led to 98.7% token reduction.
+
+**This isn't about new technology. It's about applying the RIGHT technology to a NEW problem.**
+
+Both use similar Linux primitives (namespaces, cgroups), but solve fundamentally different problems:
+- **Containers** = deployment infrastructure (ship YOUR apps)
+- **Sandboxes** = execution infrastructure (run UNTRUSTED code)
+
+AI agents don't need to *deploy* applications. They need to *execute* code they just wrote—safely.
 
 ---
 
 ## Why Sandboxes for AI Agents?
 
-Here's the key insight that Anthropic discovered: **AI agents need to write and execute code.**
+Here's the breakthrough: **AI agents need to write and execute code—code you cannot trust.**
 
-Not just call APIs. Not just make tool requests. They need to write actual code—Python, JavaScript, shell scripts—and execute it safely.
+Think about the workflow:
+1. You ask an agent: "Analyze this customer data for trends"
+2. The agent *writes Python code* to do it
+3. The agent *runs that code* immediately
+4. You get results
 
-This is where sandboxes shine. They combine the best of all previous technologies:
+Here's the problem: **You never saw the code. You never reviewed it. How do you run it safely?**
 
-- **Fast:** Start in milliseconds (serverless-like speed)
-- **Flexible:** Full file system, process management, network access (container-like power)
-- **Managed:** No orchestration needed (true serverless)
-- **Stateful:** Persistent environments across requests
-- **Edge-native:** Globally distributed, close to users
+This isn't a theoretical concern. AI-generated code could:
+- Access files it shouldn't
+- Make network calls you didn't authorize
+- Crash and take your system with it
+- Execute malicious operations (intentionally or by mistake)
 
-**This is the moment sandboxes become critical.** They're the infrastructure layer that makes efficient, scalable AI agents possible.
+### Why Sandboxes Specifically?
+
+When AI writes code, you need to run it safely. What are your options?
+
+**❌ Containers?**
+- Assume you wrote the Dockerfile
+- Not designed for hostile code
+- Built for deployment, not ephemeral execution
+
+**❌ VMs?**
+- Too slow (seconds to start)
+- AI needs millisecond-level responsiveness
+- Overhead kills the workflow
+
+**❌ Traditional serverless?**
+- Same trust assumptions as containers
+- Expects you to package the code
+- Not built for zero-trust execution
+
+**✅ Sandboxes?**
+- Purpose-built for untrusted code (since 2010s)
+- Millisecond startup (ephemeral by design)
+- Zero-trust model (assume code is hostile)
+- **AI agents just gave them a killer use case**
+
+The technology existed. AI agents made it essential. But wait—aren't sandboxes just containers? Let's clear that up.
 
 ---
 
 ## What IS a Sandbox?
 
-Let's make this simple.
+**A sandbox is a zero-trust execution environment.**
 
-**A sandbox is like running a process inside Docker.** It has:
-- Its own file system (isolated from your system)
-- Its own execution environment (can't access anything outside)
-- The ability to start, run code, and stop independently
+Think of it as a secure containment chamber for dangerous code:
 
-Think of it like this: When kids play in a sandbox, they can build anything they want. They can make a mess. They can experiment. But the sand stays in the sandbox—it doesn't get all over the house. When they're done, you can knock it down and start fresh.
+- **Assumes hostility:** Every line of code is treated as potentially dangerous
+- **Total isolation:** Can't access your files, network, or system
+- **Ephemeral:** Exists only for the execution, then destroyed
+- **Observable:** You get results (stdout, stderr, exit code), nothing more
 
-**In computing, sandboxes work the same way:**
+**Real-world analogies:**
 
-- Code runs in complete isolation
-- If it crashes or does something dangerous, it only affects the sandbox
-- You get back the results (stdout, stderr, exit code)
-- When you're done, the sandbox can be destroyed or reset
-- Everything is safe, contained, and ephemeral
+**Kids' sandbox:** They can build anything, make a mess, experiment. But the sand stays contained—it doesn't get all over the house. When they're done, you knock it down and start fresh.
 
----
+**Bomb disposal chamber:** Put something dangerous inside, trigger it safely, see what happened, clean up. The key isn't just isolation—it's **zero-trust isolation for untrusted payloads**.
 
-## Try It Yourself First (2 Minutes)
+**Examples you already use:**
+- **Chrome's sandbox:** Runs untrusted web code safely
+- **Bubblewrap:** Sandboxes Linux applications
+- **Firejail:** Isolates applications from your system
 
-Before using my deployed sandbox, let's get one running on your machine using Cloudflare's official SDK. This is the fastest way to understand what sandboxes actually do.
+**For AI agents:** Cloudflare Workers, AWS Firecracker, and others adapted this proven technology for AI-generated code execution.
 
-**Prerequisites:**
-
-> ⚠️ **WINDOWS USERS: WSL Required**
->
-> Cloudflare Sandboxes need Linux. Windows users must use WSL2.
->
-> **Don't have WSL? Install it first:**
-> 1. Open PowerShell as Administrator
-> 2. Run: `wsl --install`
-> 3. Restart your computer
-> 4. Open "Ubuntu" from Start menu (installed automatically)
-> 5. Create a username and password when prompted
-> 6. Run all tutorial commands in the Ubuntu terminal
->
-> **Already have WSL?** Just use your Ubuntu/Linux terminal instead of PowerShell.
->
-> **Tip:** Access Windows files from WSL: `/mnt/c/Users/YourName/`
-
-**Required software:**
-
-□ **Docker Desktop** installed and running
-  - Don't have it? Download from [docker.com](https://www.docker.com/products/docker-desktop)
-  - Test it works: Run `docker info` in terminal - should show Docker info, not an error
-  - Make sure Docker Desktop is actually running (check system tray)
-
-□ **Node.js 16.17.0 or later**
-  - Check version: `node --version`
-  - Don't have it? Download from [nodejs.org](https://nodejs.org)
-
-□ **Windows users only: WSL2 installed**
-  - What's WSL? Windows Subsystem for Linux - lets you run Linux on Windows
-  - Install guide: [microsoft.com/wsl/install](https://learn.microsoft.com/en-us/windows/wsl/install)
-  - Quick install: Open PowerShell as Administrator, run `wsl --install`, restart computer
-  - After install: Open "Ubuntu" from Start menu - all commands run in Ubuntu terminal
-
-□ **Cloudflare account** - NOT required for local development
-
-**Step 1: Create project from template**
-
-```bash
-npm create cloudflare@latest my-sandbox --template=cloudflare/sandbox-sdk/examples/minimal
-cd my-sandbox
-```
-
-The template will ask configuration questions—choose defaults for local testing. You can skip deployment if you don't have a Cloudflare account.
-
-> **📦 Important:** The template doesn't include `@cloudflare/sandbox` by default. Install it now:
-> ```bash
-> npm install @cloudflare/sandbox
-> ```
-
-**Step 2: Replace worker code (optional - for blog integration)**
-
-The default template only has demo endpoints. To connect your sandbox to this blog's interactive examples, replace `my-sandbox/src/index.ts` with this code:
-
-```typescript
-import { getSandbox } from '@cloudflare/sandbox';
-
-// Export the Sandbox class (required for Durable Objects)
-export { Sandbox } from '@cloudflare/sandbox';
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const sandbox = getSandbox(env.Sandbox, 'my-sandbox');
-
-    // CORS headers for browser requests
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    };
-
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    try {
-      // Endpoint 1: Execute Python code (accepts GET or POST)
-      if (url.pathname === '/run') {
-        let code = 'print(2 + 2)'; // default demo code
-
-        // Accept code from POST body (for longer code) or query parameter (for demos)
-        if (request.method === 'POST') {
-          const body = await request.json();
-          code = body.code || code;
-        } else {
-          code = url.searchParams.get('code') || code;
-        }
-
-        // Write code to temp file and execute (handles multi-line code)
-        await sandbox.writeFile('/tmp/script.py', code);
-        const result = await sandbox.exec('python3 /tmp/script.py');
-        return Response.json(
-          {
-            stdout: result.stdout,
-            stderr: result.stderr,
-            exitCode: result.exitCode,
-          },
-          { headers: corsHeaders }
-        );
-      }
-
-      // Endpoint 2: File operations (demo)
-      if (url.pathname === '/file') {
-        await sandbox.writeFile('/workspace/hello.txt', 'Hello, Sandbox!');
-        const file = await sandbox.readFile('/workspace/hello.txt');
-        return Response.json({ content: file.content }, { headers: corsHeaders });
-      }
-
-      // Endpoint 3: Execute custom code (for blog integration)
-      if (url.pathname === '/sandbox' && request.method === 'POST') {
-        const body = await request.json();
-        const { language, code } = body;
-
-        // Convert to command format
-        let command: string;
-        if (language === 'python') {
-          command = `python3 -c ${JSON.stringify(code)}`;
-        } else if (language === 'javascript' || language === 'js') {
-          command = `node -e ${JSON.stringify(code)}`;
-        } else {
-          return Response.json(
-            { error: 'Unsupported language' },
-            { status: 400, headers: corsHeaders }
-          );
-        }
-
-        const result = await sandbox.exec(command);
-        return Response.json(
-          {
-            stdout: result.stdout,
-            stderr: result.stderr,
-            exitCode: result.exitCode,
-          },
-          { headers: corsHeaders }
-        );
-      }
-
-      // Default: Show available endpoints
-      return new Response('Try /run, /file, or /sandbox', {
-        headers: { 'Content-Type': 'text/plain', ...corsHeaders },
-      });
-    } catch (error) {
-      return Response.json(
-        { error: error instanceof Error ? error.message : 'An error occurred' },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-  },
-} satisfies ExportedHandler<Env>;
-```
-
-This adds:
-- `/run` - Execute Python code (pass code via `?code=` query parameter, or runs demo)
-- `/file` - Demo file operations (write and read files)
-- `/sandbox` - Execute any language code (accepts POST JSON with `{language, code}`)
-- CORS headers for browser requests
-
-**Step 3: Start local development**
-
-```bash
-npm run dev
-```
-
-First run builds the Docker container (2-3 minutes). Subsequent runs are much faster with caching.
-
-**Step 4: Test it**
-
-```bash
-# Execute demo Python code (GET)
-curl http://localhost:8787/run
-
-# Execute custom Python code (GET with query parameter)
-curl "http://localhost:8787/run?code=print('Hello%20World')"
-
-# Execute longer Python code (POST with JSON body - recommended)
-curl -X POST http://localhost:8787/run \
-  -H "Content-Type: application/json" \
-  -d '{"code":"print(\"Hello from my sandbox!\")"}'
-
-# File operations
-curl http://localhost:8787/file
-
-# Blog integration endpoint (accepts any language)
-curl -X POST http://localhost:8787/sandbox \
-  -H "Content-Type: application/json" \
-  -d '{"language":"python","code":"print(\"Hello from my sandbox!\")"}'
-```
-
-**What success looks like:**
-
-✅ If everything works, you'll see JSON responses like this:
-
-```json
-{
-  "stdout": "4\n",
-  "stderr": "",
-  "exitCode": 0
-}
-```
-
-**Common errors and fixes:**
-
-❌ **"Cannot connect to Docker daemon"**
-→ Docker isn't running. Start Docker Desktop and wait for it to fully start.
-
-❌ **"ECONNREFUSED localhost:8787"**
-→ Your sandbox isn't running. Make sure `npm run dev` is running in the my-sandbox directory.
-
-❌ **"command not found: npm"**
-→ Node.js isn't installed. Download from nodejs.org
-
-❌ **"Invalid service name" or "Cannot find module"**
-→ You're in the wrong directory. Run `cd my-sandbox` first, then `npm install @cloudflare/sandbox`
-
-**Windows users:**
-❌ **"docker: command not found" in PowerShell**
-→ You're not in WSL. Open "Ubuntu" from Start menu, navigate to your project folder there.
-
-**Available endpoints:**
-- `/run` - Execute Python code (GET with `?code=` query parameter OR POST with JSON body)
-- `/file` - Demo file operations
-- `/sandbox` - Execute any language code (POST with JSON body)
-
-**What just happened?**
-
-In 2 minutes you:
-- ✓ Spun up an isolated compute environment
-- ✓ Ran Python code that can't touch your system
-- ✓ Got back structured results (stdout, stderr, exitCode)
-- ✓ All locally - no cloud account needed
-
-**This is what AI agents do thousands of times per hour:**
-- Write code for specific tasks
-- Execute in isolation
-- Process results safely
-- Move to next task
-
-**You just experienced the infrastructure behind AI's future.**
-
-**Optional: Deploy to production**
-
-```bash
-npx wrangler deploy
-```
-
-**Note:** Deployment requires a Cloudflare account. For now, local development is enough to understand sandboxes!
-
-Now you've run a sandbox yourself using the official SDK. You understand what it is. Let's see more examples.
+**NOT like containers:** Containers are deployment packaging for YOUR applications. Sandboxes are execution chambers for code you've never seen.
 
 ---
 
-## Experience More Examples
+## But Aren't Sandboxes Just Containers?
 
-Now that you've run a sandbox locally, try these interactive examples with YOUR local sandbox.
+**"Wait, can't I just use Docker containers for this?"**
 
-**Prerequisites:**
-- Your local sandbox must be running (`npm run dev` in the `my-sandbox` directory)
-- Running on port 8787
-- Updated with the worker code from Step 2 above
+You *could*, but here's the key difference:
 
-The examples below will connect to `http://localhost:8787` by default. You can change the URL if your sandbox is running on a different port.
+**Containers** = deployment infrastructure
+- You package YOUR application
+- It runs for days/weeks
+- You control the Dockerfile
+- Think: Cargo ship delivering your product
 
-**Try modifying the code:**
-- Edit `my-sandbox/src/index.ts`
-- Changes hot-reload automatically
-- Click "Run in Sandbox" again to see your changes!
+**Sandboxes** = execution infrastructure
+- Run UNTRUSTED code on-the-fly
+- Ephemeral (milliseconds)
+- Assume code is hostile
+- Think: Bomb disposal chamber for dangerous payloads
 
-<SandboxTabs />
+**The analogy:** Using containers for AI-generated code is like using a cargo ship to deliver a single letter. Or using a restaurant kitchen to cook one experimental dish someone handed you on a napkin.
+
+Both use similar tech (Linux namespaces, cgroups), but the architectural intent is completely different. **AI agents don't need to deploy applications—they need to execute code they just wrote, safely.**
+
+---
+
+## Ready to Build?
+
+Now that you understand what sandboxes are and why they matter, it's time to experience them firsthand.
+
+Want to run your own sandbox? The hands-on tutorial shows you how to:
+- Set up a local sandbox in 2 minutes
+- Execute AI-generated code safely
+- Build interactive examples
+- Deploy to production
+
+**[→ Read the Tutorial: Building with Sandboxes](/articles/building-with-sandboxes-tutorial)**
+
+Or explore with Cloudflare directly:
+- **[Cloudflare Sandbox Documentation](https://developers.cloudflare.com/sandbox/)** - Official setup guide
+- **[Get Started Guide](https://developers.cloudflare.com/sandbox/get-started/)** - Quick start in 5 minutes
 
 ---
 
