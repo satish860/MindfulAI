@@ -29,99 +29,74 @@ Here's what I discovered. And why sandboxes are the critical infrastructure enab
 
 ---
 
-## The Trust Spectrum: Understanding What Changed
+## The Problem AI Created
 
-To understand why sandboxes exist, you need to understand the question that changed everything: **Do you trust the code you're running?**
+Here's what changed: **AI agents write code you've never seen.**
 
-Traditional infrastructure assumes you control the code. You write it, test it, deploy it. Even with containers—you're deploying *your* applications. The code is trusted because you created it.
+When you deploy a normal application, you wrote the code. You tested it. You trust it.
 
-AI agents broke this assumption. They generate code in real-time that you've never seen before. This isn't a deployment problem. It's a **trust problem**.
+But AI agents? They generate code on-the-fly for each task. You can't review it beforehand. You can't trust it by default.
 
-### The Infrastructure That Already Existed
-
-By the 2010s, we had **two parallel solutions** for different problems:
-
-| **Containers (Docker, 2013)** | **Sandboxes (Bubblewrap, Chrome, 2010s)** |
-|-------------------------------|-------------------------------------------|
-| **Purpose:** Deploy YOUR apps | **Purpose:** Run UNTRUSTED code safely |
-| You wrote the Dockerfile | Assume code is hostile |
-| Long-running services | Ephemeral execution |
-| **Examples:** Docker, Kubernetes | **Examples:** Bubblewrap, Firejail, browser sandboxes |
-
-**These aren't sequential. They coexisted, solving different problems.**
-
-### What Changed in 2020s: AI Agents
-
-AI agents created a **NEW use case** for an OLD technology:
-
-**The challenge:** AI agents generate custom code for each task. You've never reviewed it. You need to run it safely.
-
-**The solution:** Sandboxes—technology that was ALREADY designed for untrusted code.
-
-**Anthropic's breakthrough:** Using sandboxes for AI-generated code execution led to 98.7% token reduction.
-
-**This isn't about new technology. It's about applying the RIGHT technology to a NEW problem.**
-
----
-
-## Why Sandboxes for AI Agents?
-
-Think about the workflow:
-1. You ask an agent: "Analyze this customer data for trends"
-2. The agent *writes Python code* to do it
-3. The agent *runs that code* immediately
+**Example workflow:**
+1. You ask: "Analyze this customer data for trends"
+2. Agent writes Python code to do it
+3. Agent runs that code immediately
 4. You get results
 
-AI-generated code could access files it shouldn't, make unauthorized network calls, crash your system, or execute malicious operations. So when AI writes code, you need to run it safely. What are your options?
-
-**❌ Containers?**
-- Assume you wrote the Dockerfile
-- Not designed for hostile code
-- Built for deployment, not ephemeral execution
-
-**❌ VMs?**
-- Too slow (seconds to start)
-- AI needs millisecond-level responsiveness
-- Overhead kills the workflow
-
-**❌ Traditional serverless?**
-- Same trust assumptions as containers
-- Expects you to package the code
-- Not built for zero-trust execution
-
-**✅ Sandboxes?**
-- Purpose-built for untrusted code (since 2010s)
-- Millisecond startup (ephemeral by design)
-- Zero-trust model (assume code is hostile)
-- **AI agents just gave them a killer use case**
-
----
+That code could access files it shouldn't, make network calls you didn't authorize, or crash your system. How do you run it safely?
 
 ## What IS a Sandbox?
 
-**A sandbox is a zero-trust execution environment.**
+**A sandbox is a secure box where you run code you don't trust.**
 
-Think of it as a secure containment chamber for dangerous code:
+Think of a kids' sandbox. They can build anything, make a mess, experiment. The sand stays contained—it doesn't get all over the house. When done, you knock it down and start fresh.
 
-- **Assumes hostility:** Every line of code is treated as potentially dangerous
-- **Total isolation:** Can't access your files, network, or system
-- **Ephemeral:** Exists only for the execution, then destroyed
-- **Observable:** You get results (stdout, stderr, exit code), nothing more
+**Same idea for code:**
+- Code runs in complete isolation (can't touch your files or system)
+- Assume it's hostile (zero-trust)
+- Exists only for that one execution (ephemeral)
+- You get results back (stdout, stderr, exit code)
+- Then it's destroyed
 
-**Real-world analogies:**
+**Real examples you already use:**
+- Chrome's sandbox runs untrusted web code safely
+- Browser plugins run in sandboxes
+- Mobile apps run in sandboxes
 
-**Kids' sandbox:** They can build anything, make a mess, experiment. But the sand stays contained—it doesn't get all over the house. When they're done, you knock it down and start fresh.
+For AI agents, companies like Cloudflare and AWS adapted this proven technology.
 
-**Bomb disposal chamber:** Put something dangerous inside, trigger it safely, see what happened, clean up. The key isn't just isolation—it's **zero-trust isolation for untrusted payloads**.
+## Why Not Just Use Docker Containers?
 
-**Examples you already use:**
-- **Chrome's sandbox:** Runs untrusted web code safely
-- **Bubblewrap:** Sandboxes Linux applications
-- **Firejail:** Isolates applications from your system
+Containers solve a different problem:
 
-**For AI agents:** Cloudflare Workers, AWS Firecracker, and others adapted this proven technology for AI-generated code execution.
+| **Containers** | **Sandboxes** |
+|----------------|---------------|
+| Deploy YOUR apps | Run UNTRUSTED code |
+| You wrote the Dockerfile | Assume code is hostile |
+| Runs for days/weeks | Runs for milliseconds |
+| Examples: Docker, Kubernetes | Examples: Chrome, Cloudflare Workers |
 
-**NOT like containers:** Containers are deployment packaging for YOUR applications. Sandboxes are execution chambers for code you've never seen.
+Containers are for code you trust. Sandboxes are for code you don't.
+
+**Anthropic's breakthrough:** Using sandboxes for AI-generated code led to their 98.7% token reduction.
+
+---
+
+## What This Unlocks
+
+With sandboxes, AI agents can:
+
+**Privacy-preserving workflows** - Process sensitive data in the sandbox without sending it to the model. Customer data, analytics, PII—all stay isolated.
+
+**Long-running processes** - Unlike serverless (30 second limits), sandboxes run for 45+ minutes. CI/CD pipelines, data processing, model training.
+
+**Continuous learning** - Agents save working code as reusable "skills." They build libraries of capabilities without retraining the model.
+
+**Dynamic workflows** - Instead of hard-coded workflows, agents create solutions on-demand. "Here's what I need. Let me write code to do it. Done."
+
+Anthropic didn't just optimize performance. They discovered a new way to build with AI.
+
+*Sandboxes are to AI agents what containers were to cloud computing.*
 
 ---
 
@@ -140,75 +115,6 @@ Want to run your own sandbox? The hands-on tutorial shows you how to:
 Or explore with Cloudflare directly:
 - **[Cloudflare Sandbox Documentation](https://developers.cloudflare.com/sandbox/)** - Official setup guide
 - **[Get Started Guide](https://developers.cloudflare.com/sandbox/get-started/)** - Quick start in 5 minutes
-
----
-
-## The AI Agent Connection (The "Aha!" Moment)
-
-You just did what AI agents do. But here's the critical difference:
-
-**You clicked "Run." AI agents *write* the code, then run it.**
-
-Think about what you just experienced:
-1. You ran Python code in isolation
-2. Got back structured results
-3. The sandbox kept everything safe
-4. It happened instantly, globally
-
-**This is what AI agents do thousands of times per hour:**
-
-Instead of loading 150,000 tokens of tool definitions into context, AI agents:
-- Write custom code for each task (2,000 tokens)
-- Execute it in sandboxes
-- Process data safely and efficiently
-
-**The power multiplies:**
-- Agents build libraries of reusable scripts ("skills")
-- Each task generates optimized code
-- Sensitive data stays in the sandbox
-- Workflows become dynamic, not static
-- Every problem gets a custom solution
-
-You've now experienced the infrastructure behind AI's future. Sandboxes aren't just a tool—they're what makes truly capable AI agents possible.
-
----
-
-## What Becomes Possible
-
-Beyond the efficiency gains, sandboxes unlock an entire world of possibilities:
-
-**1. Safe AI Code Execution**
-AI models can generate code (they're good at it). But you can't just execute that code in your production environment. Sandboxes give you a safe place to run AI-generated code at scale.
-
-**2. Privacy-Preserving Workflows**
-Sensitive data can flow through the sandbox without ever entering the model's context. Process customer data, run analytics, generate reports—all while keeping PII tokenized or isolated.
-
-**3. Long-Running Processes**
-Unlike typical serverless functions (30 seconds max), sandboxes can run for 45+ minutes. CI/CD pipelines, data processing, model training—all possible.
-
-**4. Continuous Learning**
-Agents can save their working code as reusable "skills." Over time, they build a library of capabilities. They get better without retraining the model.
-
-**5. Dynamic Workflows**
-This is the big one. Instead of hard-coded, static workflows, agents can create workflows on-demand. "Here's what I need to do. Let me write the code to do it. Done." Every workflow is unique. Every solution is tailored.
-
-Anthropic didn't just discover a performance optimization. They discovered a new way of building with AI. And sandboxes are the infrastructure that makes it possible.
-
----
-
-## The Seed is Planted
-
-You now understand what sandboxes are. You've run one locally. You've seen how AI agents use them. And you understand why Anthropic's breakthrough was only possible because of this infrastructure.
-
-*Sandboxes are to AI agents what containers were to cloud computing.*
-
-They're not just a tool. They're foundational infrastructure.
-
-But understanding what they are is just the beginning. In the next article, we'll explore how to actually build with them—the architecture, deployment, and real-world patterns that make AI agents truly capable.
-
-For now, I want you to sit with this idea: **What becomes possible when AI agents can write and execute code safely at global scale?**
-
-The future Anthropic described? It's being built on sandboxes.
 
 ---
 
