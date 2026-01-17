@@ -293,7 +293,6 @@ footer {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-bottom: 2rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -626,7 +625,6 @@ footer {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-bottom: 2rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -862,11 +860,16 @@ html {
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
-  margin-bottom: 2rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.article-short .article-header-top {
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
 }
 
 .article-short .article-meta::before {
@@ -1448,6 +1451,135 @@ html {
   padding: 2rem 0;
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--border-light);
+}
+
+/* Article Actions (Copy/Claude buttons) */
+.article-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.article-actions {
+  flex-shrink: 0;
+}
+
+.article-actions-group {
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.article-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  background: white;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.article-action-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.article-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.article-action-primary {
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+
+.article-action-primary.success {
+  background: var(--accent-sage);
+  color: white;
+  border-color: var(--accent-sage);
+}
+
+.article-action-toggle {
+  padding: 0.5rem;
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
+
+.article-action-dropdown {
+  position: relative;
+}
+
+.article-action-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.article-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  overflow: hidden;
+}
+
+.article-action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.article-action-menu-item:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.article-action-menu-item svg {
+  flex-shrink: 0;
+}
+
+/* Mobile adjustments for article actions */
+@media (max-width: 640px) {
+  .article-header-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .article-actions {
+    align-self: flex-end;
+    margin-top: -0.5rem;
+  }
+
+  .article-action-btn {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+  }
 }
 
 /* Accessibility */

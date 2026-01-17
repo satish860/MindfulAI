@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getArticleBySlug, getArticleSlugs } from '@/lib/articles'
 import { ThemeSwitcher } from '@/app/components/ThemeSwitcher'
 import { Logo } from '@/app/components/Logo'
+import { ArticleActions } from '@/app/components/ArticleActions'
 import { MDXRemote } from 'next-mdx-remote/rsc'
 import { getMDXComponents } from '@/mdx-components'
 import remarkGfm from 'remark-gfm'
@@ -121,12 +122,15 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
 
         <article className={articleClass}>
           <header className="article-header">
-            <div className="article-meta">
-              <time dateTime={article.metadata.date}>{formattedDate}</time>
-              <span className="reading-time">{article.metadata.readingTime}</span>
-              {article.metadata.category && (
-                <span className="category">{article.metadata.category}</span>
-              )}
+            <div className="article-header-top">
+              <div className="article-meta">
+                <time dateTime={article.metadata.date}>{formattedDate}</time>
+                <span className="reading-time">{article.metadata.readingTime}</span>
+                {article.metadata.category && (
+                  <span className="category">{article.metadata.category}</span>
+                )}
+              </div>
+              <ArticleActions slug={slug} title={article.metadata.title} />
             </div>
             <h1>{article.metadata.title}</h1>
             <p className="article-intro">{article.metadata.excerpt}</p>

@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Crimson_Text, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { ThemeProvider } from "./providers/ThemeProvider";
+import { PostHogProvider, PostHogPageView } from "./providers/PostHogProvider";
 
 const crimsonText = Crimson_Text({
   variable: "--font-crimson",
@@ -65,9 +69,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${crimsonText.variable}`}>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <PostHogProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+          <Suspense fallback={null}>
+            <PostHogPageView />
+          </Suspense>
+        </PostHogProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
