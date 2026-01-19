@@ -63,9 +63,8 @@ export function ArticleActions({ slug, title }: ArticleActionsProps) {
     <div className="article-actions">
       <div className="article-actions-group">
         <button
-          className={`article-action-btn article-action-primary ${copyState === 'copied' ? 'success' : ''}`}
-          onClick={handleCopyMarkdown}
-          disabled={copyState === 'copying'}
+          className="article-action-btn article-action-primary"
+          onClick={handleOpenInClaude}
         >
           <svg
             width="16"
@@ -77,16 +76,9 @@ export function ArticleActions({ slug, title }: ArticleActionsProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            {copyState === 'copied' ? (
-              <path d="M20 6L9 17l-5-5" />
-            ) : (
-              <>
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </>
-            )}
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          {getCopyButtonText()}
+          Chat with this blog
         </button>
 
         <div className="article-action-dropdown">
@@ -114,7 +106,11 @@ export function ArticleActions({ slug, title }: ArticleActionsProps) {
                 onClick={() => setIsDropdownOpen(false)}
               />
               <div className="article-action-menu">
-                <button onClick={handleOpenInClaude} className="article-action-menu-item">
+                <button
+                  onClick={handleCopyMarkdown}
+                  className="article-action-menu-item"
+                  disabled={copyState === 'copying'}
+                >
                   <svg
                     width="16"
                     height="16"
@@ -125,9 +121,16 @@ export function ArticleActions({ slug, title }: ArticleActionsProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    {copyState === 'copied' ? (
+                      <path d="M20 6L9 17l-5-5" />
+                    ) : (
+                      <>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </>
+                    )}
                   </svg>
-                  Chat with Claude
+                  {getCopyButtonText()}
                 </button>
                 <a
                   href={markdownUrl}
