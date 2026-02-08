@@ -1,14 +1,16 @@
 ---
-title: "I Rebuilt My AI Engineering Stack. Here's What Survived."
+title: "No More Claude Code. No More RAG. No More MCP."
 date: "2026-02-08"
-excerpt: "Dropped Claude Code for Pi, replaced MCP with CLI tools, hit 91% accuracy on regulatory docs with RLM, and started using QMD for local search. A month of changes and what I learned."
+excerpt: "We moved to better alternatives. Pi replaced Claude Code. RLM replaced RAG (72% → 91% accuracy). CLI tools replaced MCP. Here's why — and the production numbers behind each decision."
 template: "technical"
 category: "AI Engineering"
 ---
 
-I mass on tools. Not intentionally. I just kept hitting walls — with my coding agent, my document pipeline, my tool integrations — and each fix led to the next change. A month later, almost nothing in my AI engineering stack is the same.
+No more Claude Code. No more RAG. No more MCP.
 
-This is what survived, what got replaced, and why. Most of it ties back to the regulation tech work we do at a top consultancy firm in Ireland, where accuracy on document processing isn't optional.
+We moved to better alternatives. Not all at once — each fix led to the next change. A month later, almost nothing in our AI engineering stack is the same.
+
+Here's what we moved to and why. Most of it ties back to the regulation tech work we do at a top consultancy firm in Ireland, where accuracy on document processing isn't optional.
 
 ---
 
@@ -232,7 +234,7 @@ Here's where I landed after 30 days:
 | Local search | grep + memory | QMD |
 | Workflow automation | Ad hoc prompts | Pi skills + Lobster patterns |
 
-Every change reinforced the same principle: **simplicity compounds.**
+Every change reinforced the same principle: **we moved to better alternatives. And every one of them was simpler.**
 
 Pi is simple, so I spend less time fighting my tools. CLI tools are simple, so the agent spends fewer tokens on overhead. RLM is conceptually simple (let the model navigate), so the failure modes are understandable. QMD is simple (search your files locally), so it just works.
 
@@ -254,13 +256,13 @@ Three things I'm exploring:
 
 ## Quick Summary
 
-If you only take three things from this:
+No more Claude Code → **Try Pi.** Multi-model, extensible, stable. `npm install -g @mariozechner/pi-coding-agent`
 
-1. **Try Pi.** If you're using Claude Code and fighting it, Pi's minimalism might be what you need. Multi-model, extensible, stable. `npm install -g @mariozechner/pi-coding-agent`
+No more RAG → **Use RLM.** Let the model navigate documents instead of retrieving chunks. 72% → 91% on regulatory queries.
 
-2. **Question MCP.** CLI tools with READMEs are simpler, cheaper, and more composable. Use mcporter when you must bridge to MCP.
+No more MCP → **Use CLI tools.** 200 tokens vs 13,000+. Use mcporter when you must bridge to MCP.
 
-3. **Study OpenClaw.** Not for the hype — for the architecture. Four tools, 173K stars. The simplicity-at-scale pattern is real.
+And read the OpenClaw codebase. Not for the hype — for the architecture. Four tools, 173K stars. The simplicity-at-scale pattern is real.
 
 ---
 
