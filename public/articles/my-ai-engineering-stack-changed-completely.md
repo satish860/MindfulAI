@@ -1,14 +1,15 @@
 ---
-title: "I Rebuilt My AI Engineering Stack. Here's What Survived."
+title: "My AI Engineering Stack Changed Completely in 30 Days"
 date: "2026-02-08"
-excerpt: "Dropped Claude Code for Pi, replaced MCP with CLI tools, hit 91% accuracy on regulatory docs with RLM, and started using QMD for local search. A month of changes and what I learned."
+excerpt: "I dropped Claude Code for Pi, replaced MCP with CLI tools, moved from RAG to RLM for regulation tech, and discovered QMD and OpenClaw. Here's what changed and why."
 template: "technical"
 category: "AI Engineering"
 ---
+Five tools. Thirty days. Everything changed.
 
-I mass on tools. Not intentionally. I just kept hitting walls — with my coding agent, my document pipeline, my tool integrations — and each fix led to the next change. A month later, almost nothing in my AI engineering stack is the same.
+I didn't plan a stack overhaul. It happened the way most real changes happen — one frustration at a time, one discovery at a time, until I looked up and realized nothing was the same.
 
-This is what survived, what got replaced, and why. Most of it ties back to the regulation tech work we do at GT Ireland, where accuracy on document processing isn't optional.
+Here's what shifted: my coding agent, my document processing pipeline, my tool integration philosophy, and my local search infrastructure. Each change fed the next. The result is an AI engineering workflow that's faster, cheaper, and — critically for the regulation tech work we do at GT Ireland — more accurate.
 
 ---
 
