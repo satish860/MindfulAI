@@ -1,0 +1,271 @@
+---
+title: "My AI Engineering Stack Changed Completely in 30 Days"
+date: "2026-02-08"
+excerpt: "I dropped Claude Code for Pi, replaced MCP with CLI tools, moved from RAG to RLM for regulation tech, and discovered QMD and OpenClaw. Here's what changed and why."
+template: "technical"
+category: "AI Engineering"
+---
+
+Five tools. Thirty days. Everything changed.
+
+I didn't plan a stack overhaul. It happened the way most real changes happen — one frustration at a time, one discovery at a time, until I looked up and realized nothing was the same.
+
+Here's what shifted: my coding agent, my document processing pipeline, my tool integration philosophy, and my local search infrastructure. Each change fed the next. The result is an AI engineering workflow that's faster, cheaper, and — critically for the regulation tech work we do at GT Ireland — more accurate.
+
+---
+
+## From Claude Code to Pi
+
+I used Claude Code for months. It was the first CLI coding agent I tried, and for a while, it was great. Simple. Predictable.
+
+Then it stopped being simple.
+
+Every release changed the system prompt. Every update broke workflows I'd built. The tool definitions shifted. The flickering drove me insane. Claude Code turned into a spaceship with 80% of functionality I never used. I don't need a spaceship. I need a bicycle that works.
+
+[Pi](https://github.com/badlogic/pi-mono/) is that bicycle.
+
+Built by Mario Zechner, Pi is aggressively minimal. Four tools: Read, Write, Edit, Bash. A system prompt under 1,000 tokens. No MCP. No sub-agents. No plan mode. No permission popups. Just a coding agent that does what you tell it and gets out of the way.
+
+### Why Pi Won Me Over
+
+**Multi-model switching.** This is the killer feature nobody talks about enough. We live in a multi-model world. Some tasks are better on Claude. Some on GPT. Some on DeepSeek or Gemini. With Claude Code, you're locked to Anthropic. With Pi, I hit `Ctrl+L` mid-session and switch between 15+ providers — Anthropic, OpenAI, OpenRouter, Google, Groq, Cerebras, xAI, and more. Same session. No restart.
+
+```
+# Switch models mid-conversation
+Ctrl+L  → pick any model from any provider
+Ctrl+P  → cycle through favorites
+```
+
+This matters in practice. When I'm reasoning through a complex regulatory question, I use Claude Sonnet. When I need fast iteration on boilerplate, I switch to a cheaper model via OpenRouter. When I want to test against a different reasoning style, Gemini is one keystroke away.
+
+**Skills system for automation.** I follow a Kanban workflow. Pi's skills system lets me codify repeatable tasks as markdown files with instructions and tools. The agent loads them on-demand — progressive disclosure, not context bloat.
+
+```markdown
+<!-- ~/.pi/agent/skills/my-skill/SKILL.md -->
+---
+name: kanban-update
+description: Update Kanban board status and create task summaries
+---
+
+# Kanban Update
+
+## Steps
+1. Read current board state from tasks.md
+2. Update status of completed items
+3. Generate summary of changes
+```
+
+Skills are loaded only when needed. Compare this to MCP servers that dump 13,000+ tokens into your context on every session whether you use them or not.
+
+**It's fast.** Pi doesn't flicker. It doesn't consume excessive memory. It starts instantly. When I'm processing 50 regulatory documents in a day, these small speed gains compound.
+
+| Feature | Claude Code | Pi |
+|---------|------------|-----|
+| Models | Anthropic only | 15+ providers, 300+ models |
+| Mid-session model switch | No | Yes (`Ctrl+L`) |
+| System prompt size | Multi-thousand tokens | ~1,000 tokens |
+| Tools | Many (growing each release) | 4 (Read, Write, Edit, Bash) |
+| MCP support | Built-in | None (by design) |
+| Extensibility | Limited | Extensions, skills, prompt templates |
+| Stability across updates | Breaks frequently | Stable, predictable |
+
+> **The best tool is the one that adapts to your workflow. Not the one that forces you to adapt to it.**
+
+Armin Ronacher [put it best](https://lucumr.pocoo.org/2026/1/31/pi/): "Pi is interesting to me because of two main reasons: it has a tiny core, and it makes up for its tiny core by providing an extension system that also allows extensions to persist state into sessions, which is incredibly powerful."
+
+---
+
+## RLM in Production: Regulation Tech at GT Ireland
+
+I [wrote previously](/articles/why-i-stopped-using-rag-for-document-processing) about moving from RAG to Recursive Language Models for document processing. That was the theory. Here's the production update.
+
+At GT Ireland, we process regulatory documents — compliance filings, policy documents, regulatory guidance notes. The kind of documents where getting an answer wrong isn't an inconvenience. It's a compliance failure.
+
+RAG gave us 72% accuracy on complex regulatory queries. The kind that require cross-referencing Section 4.2 with Appendix B and reconciling them with an amendment from six months ago.
+
+RLM gave us 91%.
+
+That's not a marginal improvement. That's the difference between "useful prototype" and "production system."
+
+### Why RLM Works for Regulation
+
+Regulatory documents are the worst-case scenario for RAG:
+
+1. **Cross-references everywhere.** "As defined in Section 3.1(a)" appears constantly. RAG retrieves one chunk without the definition. RLM navigates to the definition.
+
+2. **Amendments override original text.** A regulation from 2024 might be partially superseded by a 2025 amendment. RAG doesn't know which version applies. RLM can be instructed to check for amendments.
+
+3. **Negation matters.** "This requirement does NOT apply to entities classified under Category B" — if your system misses the negation because it retrieved the wrong chunk, you've given wrong compliance advice.
+
+4. **Context windows are finally large enough.** With 200K token windows, the model can hold an entire regulatory document and navigate it. This wasn't possible two years ago.
+
+The architecture is the same as what I described in the [RLM article](/articles/why-i-stopped-using-rag-for-document-processing): generate a semantic table of contents first, then let the model navigate the document structure using tools. The expensive model reasons. The cheap model extracts. Costs stay manageable.
+
+---
+
+## QMD: The Missing Piece for Local Search
+
+Here's something that surprised me. [QMD](https://github.com/tobi/qmd) — built by Tobi Lütke (Shopify's CEO) — quietly solved a problem I'd been hacking around for months.
+
+QMD is an on-device search engine for markdown files. It combines BM25 full-text search, vector semantic search, and LLM re-ranking. All local. All via a CLI. 7,000+ stars on GitHub.
+
+```bash
+# Index your knowledge bases
+qmd collection add ~/regulatory-docs --name regulations
+qmd collection add ~/meeting-notes --name meetings
+
+# Search across everything
+qmd search "capital requirements directive"       # Fast keyword search
+qmd vsearch "how to comply with reporting"        # Semantic search
+qmd query "quarterly reporting obligations"       # Hybrid + reranking (best quality)
+```
+
+For our regulatory work, this was a game-changer. We have hundreds of markdown files — processed regulatory documents, meeting notes, compliance checklists, internal policies. Before QMD, finding the right document meant grep and memory. Now the agent can search semantically across everything, locally, in milliseconds.
+
+QMD fits perfectly into the CLI-first philosophy. It's a tool the agent invokes via Bash. No MCP server. No context bloat. Just `qmd query "your question"` and results come back.
+
+I'm still exploring QMD's full capabilities — the re-ranking pipeline, custom indexes, and how it plays with the RLM navigation loop. More on this in a future post.
+
+---
+
+## Why I Dropped MCP
+
+This was the most controversial change. MCP (Model Context Protocol) is Anthropic's standard for connecting AI agents to tools. It's everywhere. Every AI startup has an MCP server. Every tutorial recommends it.
+
+I stopped using it.
+
+### The Problems I Hit
+
+**Context window bloat.** Playwright MCP loads 21 tools and 13,700 tokens into your context. Chrome DevTools MCP: 26 tools, 18,000 tokens. That's 7-9% of your context window consumed before you do anything. Most sessions use 1-2 of those tools.
+
+**Not composable.** Results from MCP tool calls have to go through the agent's context. You can't pipe MCP output into another tool. You can't chain operations without the model mediating every step.
+
+**Security concerns.** Tool poisoning, tool shadowing, confused deputy problems, no built-in permissions management. [Red Hat](https://www.redhat.com/en/blog/model-context-protocol-mcp-understanding-security-risks-and-controls), [security researchers](https://mitek99.medium.com/mcps-overengineered-transport-and-protocol-design-f2e70bbbca62), and the community have documented these extensively.
+
+**Fragile ecosystem.** MCP servers break, change, or behave inconsistently. The specification is still evolving. Error handling isn't standardized. If you build on MCP today, you're building on shifting ground.
+
+### CLI Tools Are Better
+
+Mario Zechner [wrote the definitive piece](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/) on this. His argument is simple: models know how to use Bash. They know how to read READMEs. They know how to chain commands. Why add an abstraction layer?
+
+A browser automation README in 225 tokens vs. an MCP server in 13,000+ tokens. Same capabilities. 98% fewer tokens.
+
+```bash
+# CLI tools: composable, efficient, battle-tested
+qmd search "capital requirements" | jq '.results[0].path' | xargs cat
+
+# vs MCP: each step requires model mediation, token overhead, fragile connections
+```
+
+| Factor | MCP | CLI Tools |
+|--------|-----|-----------|
+| Context cost | 13,000-18,000 tokens per server | 200-500 tokens (README on demand) |
+| Composability | Results go through model context | Pipe, chain, redirect natively |
+| Loading | All tools loaded on session start | Progressive disclosure — load when needed |
+| Extensibility | Write/find/install MCP server | Write a script, add a README |
+| Security | Tool poisoning, shadowing risks | Standard Unix permissions |
+| Stability | Protocol still evolving | Bash has been stable for decades |
+
+### When You Need MCP Anyway
+
+Sometimes a tool only exists as an MCP server. For those cases, Peter Steinberger's [mcporter](https://github.com/steipete/mcporter) bridges the gap. It wraps MCP servers as CLI tools — you get the MCP ecosystem without the context overhead.
+
+```bash
+# mcporter turns any MCP server into a CLI call
+npx mcporter call linear.list_issues assignee=me
+npx mcporter call chrome-devtools.take_snapshot
+```
+
+mcporter discovers your existing MCP configs (Cursor, Claude Desktop, VS Code), connects to servers, and exposes their tools as CLI commands. It even generates standalone CLIs from MCP server definitions. Best of both worlds.
+
+Pi's philosophy is explicit about this: no MCP in the core. If you need MCP, use mcporter. If you don't, use CLI tools. The agent doesn't care — it's all Bash.
+
+---
+
+## What I Learned Reading OpenClaw's Code
+
+You've probably heard of [OpenClaw](https://github.com/openclaw/openclaw). The lobster. The name changes. The viral moment. Ignore all of that.
+
+I spent a weekend reading the source code. It taught me more about agent architecture than anything I've read this year.
+
+### Four Tools. That's It.
+
+OpenClaw uses Pi as its agent runtime. The same minimal agent I described above — four tools, sub-1,000-token system prompt — powers a system that handles WhatsApp, Telegram, Discord, Slack, and 12+ other messaging platforms. Voice input. Browser control. Cron scheduling. A full visual canvas.
+
+Four tools. Read, Write, Edit, Bash.
+
+I kept looking for the hidden complexity. The secret toolset that makes the multi-platform magic work. It's not there. The agent writes code to solve each problem as it encounters it. Need to parse a WhatsApp message? Write code. Need to format a Slack response? Write code. Need to control a browser via CDP? Write a script, run it via Bash.
+
+This validated something I'd been feeling but hadn't fully committed to: specialized tools are a crutch. Give a good model the ability to execute code, and it builds its own tools.
+
+### Lobster: Workflows Without the Agent Tax
+
+The second thing that clicked was [Lobster](https://github.com/openclaw/lobster) — OpenClaw's workflow shell. It solves a problem I hit constantly: the agent doing the same multi-step task over and over, spending tokens to reconstruct the same logic each time.
+
+Lobster lets you define typed, composable workflows that the agent calls in one step:
+
+```bash
+# Without Lobster: agent makes 10 tool calls, reasons through each step, burns tokens
+# With Lobster: one call, typed input, structured output, resumable
+node lobster.js "workflows.run --name github.pr.monitor \
+  --args-json '{\"repo\":\"org/repo\",\"pr\":1152}'"
+```
+
+The output is structured JSON. The workflow is deterministic. If it fails halfway, it resumes from where it stopped. The agent doesn't need to reason about the mechanics — just the results.
+
+I'm building the same pattern for our regulatory compliance checks. A workflow that pulls the relevant regulation, checks it against the client's filing, flags discrepancies, and formats the report. The agent orchestrates. Lobster executes. Tokens stay low.
+
+If you're building anything with AI agents, read the OpenClaw codebase. Not the README. The actual code. The architectural decisions in there — session management, multi-provider message portability, extension hot-reloading — are worth more than most blog posts on the topic.
+
+Including this one.
+
+---
+
+## The Stack Today
+
+Here's where I landed after 30 days:
+
+| Layer | Before | After |
+|-------|--------|-------|
+| Coding agent | Claude Code | Pi |
+| Model access | Anthropic only | Multi-provider via Pi (Anthropic, OpenAI, OpenRouter, etc.) |
+| Document processing | RAG | RLM (91% accuracy on regulatory queries) |
+| Tool integration | MCP servers | CLI tools + mcporter for MCP bridge |
+| Local search | grep + memory | QMD |
+| Workflow automation | Ad hoc prompts | Pi skills + Lobster patterns |
+
+Every change reinforced the same principle: **simplicity compounds.**
+
+Pi is simple, so I spend less time fighting my tools. CLI tools are simple, so the agent spends fewer tokens on overhead. RLM is conceptually simple (let the model navigate), so the failure modes are understandable. QMD is simple (search your files locally), so it just works.
+
+The complex approaches — MCP server ecosystems, RAG pipelines with embedding models and vector databases, monolithic coding agents that change every release — they all had the same failure mode. They worked until they didn't, and when they broke, I couldn't tell why.
+
+---
+
+## What's Next
+
+Three things I'm exploring:
+
+1. **QMD + RLM integration.** Using QMD to find the right regulatory documents, then RLM to navigate within them. The combination should eliminate the last manual step in our pipeline — finding which documents to process.
+
+2. **Lobster workflows for compliance checks.** Codifying our most common regulatory analysis patterns as typed, resumable workflows.
+
+3. **Pi skills for regulatory domain.** Building a skill library specific to regulatory document processing — field-level graders, format validators, cross-reference checkers. All loadable on demand.
+
+---
+
+## Quick Summary
+
+If you only take three things from this:
+
+1. **Try Pi.** If you're using Claude Code and fighting it, Pi's minimalism might be what you need. Multi-model, extensible, stable. `npm install -g @mariozechner/pi-coding-agent`
+
+2. **Question MCP.** CLI tools with READMEs are simpler, cheaper, and more composable. Use mcporter when you must bridge to MCP.
+
+3. **Study OpenClaw.** Not for the hype — for the architecture. Four tools, 173K stars. The simplicity-at-scale pattern is real.
+
+---
+
+*Building regulation tech with AI? I write about the tools and patterns that actually work in production — not the ones that look good in demos.*
+
+*Next up: QMD deep dive — how we're using local semantic search to supercharge regulatory document discovery.*
