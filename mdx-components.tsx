@@ -75,6 +75,11 @@ export function getMDXComponents(components: MDXComponents): MDXComponents {
         </CodeBlock>
       )
     },
+    table: ({ children, ...props }) => (
+      <div className="table-responsive-wrapper">
+        <table {...props}>{children}</table>
+      </div>
+    ),
     code: ({ children, ...props }) => (
       <code {...props}>
         {children}

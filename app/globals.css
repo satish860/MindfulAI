@@ -380,13 +380,28 @@ footer {
 }
 
 /* Tables */
+.table-responsive-wrapper {
+  width: 100%;
+  margin: 2rem 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  box-shadow: 0 2px 15px var(--shadow-soft);
+}
+
+.article-content .table-responsive-wrapper table,
 .article-content table {
   width: 100%;
   border-collapse: collapse;
-  margin: 2rem 0;
   background: white;
   border-radius: 8px;
   overflow: hidden;
+  margin: 0;
+}
+
+/* Fallback margin for tables not wrapped */
+.article-content > table {
+  margin: 2rem 0;
   box-shadow: 0 2px 15px var(--shadow-soft);
 }
 
@@ -403,12 +418,14 @@ footer {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 2px solid var(--accent-sage);
+  white-space: nowrap;
 }
 
 .article-content td {
   padding: 1rem;
   border-bottom: 1px solid var(--border-light);
   color: var(--text-primary);
+  min-width: 120px;
 }
 
 .article-content tbody tr:last-child td {
@@ -418,6 +435,47 @@ footer {
 .article-content tbody tr:hover {
   background: rgba(124, 152, 133, 0.05);
   transition: background 0.2s ease;
+}
+
+/* Mobile table styles */
+@media (max-width: 640px) {
+  .table-responsive-wrapper {
+    margin: 1.5rem -1rem;
+    width: calc(100% + 2rem);
+    border-radius: 0;
+    position: relative;
+  }
+
+  /* Scroll hint gradient on the right edge */
+  .table-responsive-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 24px;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.8));
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    border-radius: 0 8px 8px 0;
+  }
+
+  .article-content .table-responsive-wrapper table {
+    border-radius: 0;
+  }
+
+  .article-content th {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+  }
+
+  .article-content td {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.875rem;
+    min-width: 100px;
+  }
 }
 
 /* Mermaid diagrams */
