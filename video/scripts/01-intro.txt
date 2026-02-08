@@ -1,0 +1,5 @@
+I Rebuilt My AI Engineering Stack. Here's What Survived.
+
+I amass tools. Not intentionally. I just kept hitting walls — with my coding agent, my document pipeline, my tool integrations — and each fix led to the next change. A month later, almost nothing in my AI engineering stack is the same.
+
+This is what survived, what got replaced, and why. Most of it ties back to the regulation tech work we do at a top consultancy firm in Ireland, where accuracy on document processing isn't optional.

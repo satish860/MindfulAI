@@ -1,0 +1,7 @@
+Every change I made this month reinforced the same principle: simplicity compounds.
+
+Pi is simple, so I spend less time fighting my tools. CLI tools are simple, so the agent spends fewer tokens on overhead. RLM is conceptually simple, so the failure modes are understandable. QMD is simple, so it just works.
+
+The complex approaches — MCP ecosystems, RAG pipelines, monolithic agents — they all had the same failure mode. They worked until they didn't. And when they broke, I couldn't tell why.
+
+Three takeaways. Try Pi if you're fighting your coding agent. Question MCP — CLI tools are simpler, cheaper, and more composable. And study OpenClaw's architecture. Not for the hype. For the patterns.

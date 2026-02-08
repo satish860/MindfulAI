@@ -1,0 +1,107 @@
+I Rebuilt My AI Engineering Stack. Here's What Survived.
+
+[SECTION 1: INTRO]
+
+I amass tools. Not intentionally. I just kept hitting walls — with my coding agent, my document pipeline, my tool integrations — and each fix led to the next change. A month later, almost nothing in my AI engineering stack is the same.
+
+This is what survived, what got replaced, and why. Most of it ties back to the regulation tech work we do at GT Ireland, where accuracy on document processing isn't optional.
+
+[SECTION 2: FROM CLAUDE CODE TO PI]
+
+I used Claude Code for months. It was the first CLI coding agent I tried, and for a while, it was great. Simple. Predictable.
+
+Then it stopped being simple.
+
+Every release changed the system prompt. Every update broke workflows I'd built. The tool definitions shifted. Claude Code turned into a spaceship with eighty percent of functionality I never used. I don't need a spaceship. I need a bicycle that works.
+
+Pi is that bicycle.
+
+Built by Mario Zechner, Pi is aggressively minimal. Four tools: Read, Write, Edit, Bash. A system prompt under a thousand tokens. No MCP. No sub-agents. No plan mode. Just a coding agent that does what you tell it and gets out of the way.
+
+The killer feature? Multi-model switching. We live in a multi-model world. Some tasks are better on Claude. Some on GPT. Some on DeepSeek or Gemini. With Claude Code, you're locked to Anthropic. With Pi, I switch between fifteen-plus providers mid-session. Same conversation. No restart.
+
+When I'm reasoning through a complex regulatory question, I use Claude Sonnet. When I need fast iteration on boilerplate, I switch to a cheaper model. When I want a different reasoning style, Gemini is one keystroke away.
+
+Pi also has a skills system that fits my Kanban workflow perfectly. I codify repeatable tasks as markdown files. The agent loads them on demand. Progressive disclosure, not context bloat.
+
+The best tool is the one that adapts to your workflow. Not the one that forces you to adapt to it.
+
+[SECTION 3: RLM IN PRODUCTION]
+
+I wrote previously about moving from RAG to Recursive Language Models for document processing. That was the theory. Here's the production update.
+
+At GT Ireland, we process regulatory documents. Compliance filings. Policy documents. Regulatory guidance notes. The kind of documents where getting an answer wrong isn't an inconvenience — it's a compliance failure.
+
+RAG gave us seventy-two percent accuracy on complex regulatory queries. The kind that require cross-referencing Section four point two with Appendix B and reconciling them with an amendment from six months ago.
+
+RLM gave us ninety-one percent.
+
+That's not a marginal improvement. That's the difference between a useful prototype and a production system.
+
+Why does RLM work so well for regulation? Three reasons.
+
+First, regulatory documents are full of cross-references. "As defined in Section three point one A" appears constantly. RAG retrieves one chunk without the definition. RLM navigates to the definition.
+
+Second, amendments override original text. A regulation from twenty twenty-four might be partially superseded by a twenty twenty-five amendment. RAG doesn't know which version applies. RLM can be instructed to check.
+
+Third, negation matters. "This requirement does NOT apply to entities classified under Category B." If your system misses the negation because it retrieved the wrong chunk, you've given wrong compliance advice.
+
+The architecture is straightforward: generate a semantic table of contents first, then let the model navigate the document structure using tools. The expensive model reasons. The cheap model extracts. Costs stay manageable.
+
+[SECTION 4: QMD]
+
+Here's something that surprised me. QMD — built by Tobi Lütke, Shopify's CEO — quietly solved a problem I'd been hacking around for months.
+
+QMD is an on-device search engine for markdown files. It combines BM25 full-text search, vector semantic search, and LLM re-ranking. All local. All via a CLI.
+
+For our regulatory work, this was huge. We have hundreds of markdown files — processed regulatory documents, meeting notes, compliance checklists, internal policies. Before QMD, finding the right document meant grep and memory. Now the agent can search semantically across everything, locally, in milliseconds.
+
+QMD fits perfectly into the CLI-first philosophy. It's a tool the agent invokes via Bash. No MCP server. No context bloat. I'm still exploring its full capabilities. More on this in a future post.
+
+[SECTION 5: DROPPING MCP]
+
+This was the most controversial change. MCP — Model Context Protocol — is Anthropic's standard for connecting AI agents to tools. It's everywhere. Every AI startup has an MCP server. Every tutorial recommends it.
+
+I stopped using it.
+
+Here's why. Context window bloat. Playwright MCP loads twenty-one tools and thirteen thousand seven hundred tokens into your context. Chrome DevTools MCP: twenty-six tools, eighteen thousand tokens. That's seven to nine percent of your context window consumed before you do anything. Most sessions use one or two of those tools.
+
+MCP results aren't composable either. They have to go through the agent's context. You can't pipe output into another tool. You can't chain operations without the model mediating every step.
+
+And there are real security concerns. Tool poisoning, tool shadowing, confused deputy problems. The specification is still evolving. Error handling isn't standardized.
+
+The alternative is simpler than you'd think. Models know how to use Bash. They know how to read READMEs. They know how to chain commands. A browser automation README costs two hundred and twenty-five tokens. The equivalent MCP server costs over thirteen thousand. Same capabilities. Ninety-eight percent fewer tokens.
+
+When you absolutely need an MCP server, Peter Steinberger's mcporter bridges the gap. It wraps MCP servers as CLI tools. You get the ecosystem without the overhead.
+
+Pi's philosophy is explicit: no MCP in the core. If you need MCP, use mcporter. If you don't, use CLI tools. The agent doesn't care — it's all Bash.
+
+[SECTION 6: OPENCLAW]
+
+You've probably heard of OpenClaw. The lobster. The name changes. The viral moment. Ignore all of that.
+
+I spent a weekend reading the source code. It taught me more about agent architecture than anything I've read this year.
+
+OpenClaw uses Pi as its agent runtime. The same minimal agent — four tools, sub-thousand-token system prompt — powers a system that handles WhatsApp, Telegram, Discord, Slack, and twelve-plus messaging platforms. Voice. Browser control. Cron scheduling. A full visual canvas.
+
+Four tools. Read, Write, Edit, Bash.
+
+I kept looking for the hidden complexity. The secret toolset that makes the multi-platform magic work. It's not there. The agent writes code to solve each problem as it encounters it.
+
+This validated something I'd been feeling: specialized tools are a crutch. Give a good model the ability to execute code, and it builds its own tools.
+
+The second thing that clicked was Lobster — OpenClaw's workflow shell. It lets you define typed, composable workflows that the agent calls in one step. The output is structured. The workflow is deterministic. If it fails halfway, it resumes.
+
+I'm building the same pattern for our regulatory compliance checks. The agent orchestrates. Lobster executes. Tokens stay low.
+
+If you're building with AI agents, read the OpenClaw codebase. Not the README. The actual code. The architectural decisions are worth more than most blog posts on the topic. Including this one.
+
+[SECTION 7: CLOSING]
+
+Every change I made this month reinforced the same principle: simplicity compounds.
+
+Pi is simple, so I spend less time fighting my tools. CLI tools are simple, so the agent spends fewer tokens on overhead. RLM is conceptually simple, so the failure modes are understandable. QMD is simple, so it just works.
+
+The complex approaches — MCP ecosystems, RAG pipelines, monolithic agents — they all had the same failure mode. They worked until they didn't. And when they broke, I couldn't tell why.
+
+Three takeaways. Try Pi if you're fighting your coding agent. Question MCP — CLI tools are simpler, cheaper, and more composable. And study OpenClaw's architecture. Not for the hype. For the patterns.

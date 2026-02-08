@@ -1,0 +1,17 @@
+You've probably heard of OpenClaw. The lobster. The name changes. The viral moment. Ignore all of that.
+
+I spent a weekend reading the source code. It taught me more about agent architecture than anything I've read this year.
+
+OpenClaw uses Pi as its agent runtime. The same minimal agent — four tools, sub-thousand-token system prompt — powers a system that handles WhatsApp, Telegram, Discord, Slack, and twelve-plus messaging platforms. Voice. Browser control. Cron scheduling. A full visual canvas.
+
+Four tools. Read, Write, Edit, Bash.
+
+I kept looking for the hidden complexity. The secret toolset that makes the multi-platform magic work. It's not there. The agent writes code to solve each problem as it encounters it.
+
+This validated something I'd been feeling: specialized tools are a crutch. Give a good model the ability to execute code, and it builds its own tools.
+
+The second thing that clicked was Lobster — OpenClaw's workflow shell. It lets you define typed, composable workflows that the agent calls in one step. The output is structured. The workflow is deterministic. If it fails halfway, it resumes.
+
+I'm building the same pattern for our regulatory compliance checks. The agent orchestrates. Lobster executes. Tokens stay low.
+
+If you're building with AI agents, read the OpenClaw codebase. Not the README. The actual code. The architectural decisions are worth more than most blog posts on the topic. Including this one.

@@ -1,0 +1,17 @@
+I used Claude Code for months. It was the first CLI coding agent I tried, and for a while, it was great. Simple. Predictable.
+
+Then it stopped being simple.
+
+Every release changed the system prompt. Every update broke workflows I'd built. The tool definitions shifted. Claude Code turned into a spaceship with eighty percent of functionality I never used. I don't need a spaceship. I need a bicycle that works.
+
+Pi is that bicycle.
+
+Built by Mario Zechner, Pi is aggressively minimal. Four tools: Read, Write, Edit, Bash. A system prompt under a thousand tokens. No MCP. No sub-agents. No plan mode. Just a coding agent that does what you tell it and gets out of the way.
+
+The killer feature? Multi-model switching. We live in a multi-model world. Some tasks are better on Claude. Some on GPT. Some on DeepSeek or Gemini. With Claude Code, you're locked to Anthropic. With Pi, I switch between fifteen-plus providers mid-session. Same conversation. No restart.
+
+When I'm reasoning through a complex regulatory question, I use Claude Sonnet. When I need fast iteration on boilerplate, I switch to a cheaper model. When I want a different reasoning style, Gemini is one keystroke away.
+
+Pi also has a skills system that fits my Kanban workflow perfectly. I codify repeatable tasks as markdown files. The agent loads them on demand. Progressive disclosure, not context bloat.
+
+The best tool is the one that adapts to your workflow. Not the one that forces you to adapt to it.

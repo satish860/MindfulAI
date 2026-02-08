@@ -1,0 +1,19 @@
+I wrote previously about moving from RAG to Recursive Language Models for document processing. That was the theory. Here's the production update.
+
+At a top consultancy firm in Ireland, we process regulatory documents. Compliance filings. Policy documents. Regulatory guidance notes. The kind of documents where getting an answer wrong isn't an inconvenience — it's a compliance failure.
+
+RAG gave us seventy-two percent accuracy on complex regulatory queries. The kind that require cross-referencing Section four point two with Appendix B and reconciling them with an amendment from six months ago.
+
+RLM gave us ninety-one percent.
+
+That's not a marginal improvement. That's the difference between a useful prototype and a production system.
+
+Why does RLM work so well for regulation? Three reasons.
+
+First, regulatory documents are full of cross-references. "As defined in Section three point one A" appears constantly. RAG retrieves one chunk without the definition. RLM navigates to the definition.
+
+Second, amendments override original text. A regulation from twenty twenty-four might be partially superseded by a twenty twenty-five amendment. RAG doesn't know which version applies. RLM can be instructed to check.
+
+Third, negation matters. "This requirement does NOT apply to entities classified under Category B." If your system misses the negation because it retrieved the wrong chunk, you've given wrong compliance advice.
+
+The architecture is straightforward: generate a semantic table of contents first, then let the model navigate the document structure using tools. The expensive model reasons. The cheap model extracts. Costs stay manageable.

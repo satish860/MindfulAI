@@ -1,0 +1,7 @@
+Here's something that surprised me. QMD — built by Tobi Lütke, Shopify's CEO — quietly solved a problem I'd been hacking around for months.
+
+QMD is an on-device search engine for markdown files. It combines BM25 full-text search, vector semantic search, and LLM re-ranking. All local. All via a CLI.
+
+For our regulatory work, this was huge. We have hundreds of markdown files — processed regulatory documents, meeting notes, compliance checklists, internal policies. Before QMD, finding the right document meant grep and memory. Now the agent can search semantically across everything, locally, in milliseconds.
+
+QMD fits perfectly into the CLI-first philosophy. It's a tool the agent invokes via Bash. No MCP server. No context bloat. I'm still exploring its full capabilities. More on this in a future post.

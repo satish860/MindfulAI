@@ -1,0 +1,15 @@
+This was the most controversial change. MCP — Model Context Protocol — is Anthropic's standard for connecting AI agents to tools. It's everywhere. Every AI startup has an MCP server. Every tutorial recommends it.
+
+I stopped using it.
+
+Here's why. Context window bloat. Playwright MCP loads twenty-one tools and thirteen thousand seven hundred tokens into your context. Chrome DevTools MCP: twenty-six tools, eighteen thousand tokens. That's seven to nine percent of your context window consumed before you do anything. Most sessions use one or two of those tools.
+
+MCP results aren't composable either. They have to go through the agent's context. You can't pipe output into another tool. You can't chain operations without the model mediating every step.
+
+And there are real security concerns. Tool poisoning, tool shadowing, confused deputy problems. The specification is still evolving. Error handling isn't standardized.
+
+The alternative is simpler than you'd think. Models know how to use Bash. They know how to read READMEs. They know how to chain commands. A browser automation README costs two hundred and twenty-five tokens. The equivalent MCP server costs over thirteen thousand. Same capabilities. Ninety-eight percent fewer tokens.
+
+When you absolutely need an MCP server, Peter Steinberger's mcporter bridges the gap. It wraps MCP servers as CLI tools. You get the ecosystem without the overhead.
+
+Pi's philosophy is explicit: no MCP in the core. If you need MCP, use mcporter. If you don't, use CLI tools. The agent doesn't care — it's all Bash.
