@@ -1,0 +1,215 @@
+---
+title: "You Don't Need 36 Tools to Build Agentic RAG"
+date: "2026-02-12"
+excerpt: "An infographic says you need 9 levels and 36 tools for Agentic RAG. I process 10,000+ documents for aviation lessors with bash, one LLM, and a markdown file. Here's the counter-stack."
+template: "technical"
+category: "AI Engineering"
+---
+There's an infographic going around LinkedIn right now. "Agentic RAG — Tech Stack." 9 levels. 36 tools. It looks impressive.
+
+![Agentic RAG Tech Stack — 9 levels, 36 tools from Deployment to Alignment](/images/agentic-rag-tech-stack.jpg)
+*Credit: Graphic by R. Gohel, via [Andreas Horn on LinkedIn](https://www.linkedin.com/in/andreashorn1/).*
+
+Beautiful chart. Very shareable. One problem.
+
+**You don't need any of it.**
+
+---
+
+## What I Actually Use
+
+I've processed 10,000+ documents in production. Aviation leases, cargo manifests, compliance frameworks, court transcripts. Real documents, real clients, real money on the line.
+
+Here's my stack:
+
+| What the chart says you need | What I actually use |
+|---|---|
+| **Level 0** — Groq, AWS, Google Cloud, Together.ai | My laptop. Docker if it's a server. I need storage, not infrastructure. |
+| **Level 1** — LangSmith, Phoenix, DeepEval, Ragas | A judge prompt and a JSON file of expected answers. Pass or fail. |
+| **Level 2** — Llama 4, Gemini 2.5 Pro, Claude 4, GPT-4o | One LLM. Whichever is cheapest for the task. |
+| **Level 3** — LangChain, LlamaIndex, Haystack, DSPy | `bash` and `read`. Seriously. |
+| **Level 4** — Pinecone, Chroma, Milvus, Weaviate | `grep`. Or SQLite if I'm feeling fancy. |
+| **Level 5** — Nomic, Ollama, Voyage AI, OpenAI Embeddings | You don't need embeddings when you can read the document. |
+| **Level 6** — Firecrawl, Scrapy, Docling, Llamaparse | PyMuPDF. One library. 40 lines. |
+| **Level 7** — Zep, Mem0, Cognee, Letta | A markdown file. |
+| **Level 8** — Guardrails AI, Arize, Langfuse, Helicone | The eval loop. Did the answer match the expected output? Yes or no. |
+
+9 levels. 36 tools. Probably $50K/year in SaaS licensing if you actually connect them all.
+
+Or: **bash, read, one LLM, and the discipline to measure whether it worked.**
+
+---
+
+## The Real Problem With This Chart
+
+It's not that these tools are bad. Some are excellent. Chroma is solid. LangSmith does useful things. DeepEval has good ideas.
+
+The problem is the chart sells **complexity as a prerequisite**. It says: before you can build intelligent document processing, you need to assemble 9 layers of infrastructure. That's backwards.
+
+You need **one thing** before anything else: a way to know if your system is giving correct answers.
+
+That's evaluation. Level 1 on their chart. The thing you supposedly set up *after* deployment infrastructure, *after* your LLM, *after* your framework, *after* your vector database, *after* your embedding pipeline.
+
+**Evaluation should be Level 0.** Everything else is optional until you can measure.
+
+56% of enterprises see zero ROI from AI (PwC, 4,454 CEOs surveyed). I'd bet most of them had beautiful tech stacks. Multiple levels. Enterprise licenses. The works. What they didn't have was a way to measure whether any of it was producing correct outputs.
+
+---
+
+## How 10,000 Documents Actually Get Processed
+
+Here's what happens when a new aviation document hits our system:
+
+```
+1. PDF arrives (email, folder, API — doesn't matter)
+2. PyMuPDF extracts text and tables
+3. LLM extracts structured fields (aircraft type, lease terms, maintenance reserves)
+4. Output compared against expected schema
+5. Pass → goes to production. Fail → human reviews → correction feeds back
+6. Next time, same pattern → system gets it right
+```
+
+That's it. No vector database. No embedding pipeline. No framework. No alignment layer.
+
+The secret isn't in the stack. It's in step 5: **the correction loop**. Every failure makes the next extraction better. Not because of a fancy tool — because someone looked at the wrong answer and wrote down the right one.
+
+We went from 67% accuracy to 92% accuracy on aviation lease extraction. Not by adding more tools. By measuring failures and fixing the patterns.
+
+---
+
+## When You Actually Need the Tools
+
+I'm not saying vector databases are useless. If you have 100,000 documents and need semantic search across all of them, embeddings + a vector store makes sense. If you're running a team of 15 engineers across multiple AI products, LangSmith's tracing helps.
+
+But those are scaling problems. Most teams aren't there yet. Most teams have 50 documents and zero eval.
+
+**The sequence matters:**
+
+1. Parse the document (one library)
+2. Extract what you need (one LLM call)
+3. Measure if it's right (one eval script)
+4. Fix what's wrong (human feedback)
+5. Repeat until accuracy stops being embarrassing
+
+Then, *only then*, think about which of the 36 tools you actually need.
+
+---
+
+## The 19-Year Take
+
+I've been engineering for 19 years. The pattern repeats every cycle. Java needed 14 frameworks before you could write "Hello World." Kubernetes needed 8 tools before you could deploy a container. Now AI needs 36 tools before you can read a PDF.
+
+It's the same trap. Vendors sell infrastructure because infrastructure has recurring revenue. Infographics sell complexity because complexity gets LinkedIn shares. Neither sells what actually matters: **did the system produce the right answer?**
+
+The best document AI system I've ever built runs on bash, one LLM, and a relentless eval loop. It processes 10,000+ documents. It runs in production. It gets more accurate every week.
+
+No Pinecone subscription. No LangChain dependency. No alignment layer.
+
+Just the question: **is the answer right?**
+
+And if it's not: **why, and how do we fix it?**
+
+Everything else is optional.
+
+---
+
+## The Method, Not The Tool
+
+I'm not asking you to install anything. I'm asking you to understand the approach.
+
+I open-sourced [Loop](https://github.com/satish860/loop) — not as another tool for your stack, but as a reference implementation of the method. Read through it. Understand why it works. Then copy the parts that matter or build your own.
+
+Here's the entire method, with Loop as the walkthrough:
+
+### Step 1: Parse the document
+
+```bash
+loop ingest ./documents/
+```
+
+That's it. PDFs, Excel, CSV — one command. Under the hood it's PyMuPDF converting to markdown. No "data extraction layer." No Firecrawl. No Llamaparse. Just read the file.
+
+You don't need Loop for this. `pymupdf4llm.to_markdown("file.pdf")` does the same thing in one line of Python.
+
+### Step 2: Ask questions
+
+```bash
+loop chat
+> What are the maintenance reserve rates for MSN 4521?
+
+📄 Source: lease_amendment_msn4521.pdf (page 14, §4.3)
+Monthly reserve: $420/FH for engine restoration...
+```
+
+One LLM call with the document text as context. Loop uses Pi SDK under the hood — but you could do this with a raw API call to Claude, GPT, Gemini, whatever. No LangChain. No framework. Send text, get answer, cite the source.
+
+### Step 3: Evaluate — this is the part everyone skips
+
+```bash
+loop eval --benchmark custom
+```
+```
+  Results: 23/30 passed (76.7%)
+
+  ❌ Q12: maintenance_reserves — expected "$420/FH", got "$350/FH"
+  ❌ Q17: lease_expiry — expected "2028-03-15", got "March 2028"
+  ❌ Q22: engine_type — expected "CFM56-7B27", got "CFM56-7B"
+  ...
+```
+
+**Binary. Pass or fail.** Not "looks about right." Not a 1-5 score. Did the answer match the expected output?
+
+The benchmark is just a JSON file — questions with known correct answers for your documents. You write it once. You run it every time you change anything.
+
+You don't need Loop for this either. A JSON file and a comparison script does the same job. The point isn't the tool. The point is: **write down what the correct answers are, and check every time.**
+
+### Step 4: Analyze what failed
+
+```bash
+loop eval --improve
+```
+```
+  Pattern detected: date formatting
+  7 of 9 failures involve date fields
+  Suggestion: Add explicit date format instruction — "Return dates as YYYY-MM-DD"
+```
+
+Look at the failures. Not randomly — the **pattern**. Is it always dates? Always currency formatting? Always the second table on page 4?
+
+Loop's judge does this automatically. But you can do it with your eyes. Pull the failures into a spreadsheet. Sort by field type. The pattern jumps out.
+
+### Step 5: Repeat — this is the product
+
+```bash
+loop eval --history
+```
+```
+  Run 1  ████████████████░░░░░░░░░░░░░░░░  52%  baseline
+  Run 2  ████████████████████████░░░░░░░░  68%  +16%  fix: numerical extraction
+  Run 3  ██████████████████████████████░░  81%  +13%  fix: cross-doc references
+  Run 4  ████████████████████████████████  89%   +8%  fix: date parsing
+```
+
+**That's the curve.** Parse → Ask → Evaluate → Fix → Repeat.
+
+We went from 67% to 92% by running this loop hundreds of times on real documents. Not by adding tools. By measuring failures and fixing the patterns until they stopped appearing.
+
+The curve is what you show your manager. The curve is what you show the client. The curve is proof that it works — not a demo, not a pitch deck, not a 36-tool architecture diagram.
+
+---
+
+## The Point
+
+You don't need Loop. You don't need any tool. You need the method:
+
+1. Parse the document (any library)
+2. Ask the LLM (any model)
+3. **Measure if the answer is right** (this is the hard part — nobody does it)
+4. Find the pattern in failures
+5. Fix it and measure again
+
+If you understand why Step 3 matters more than Steps 1 and 2 combined, you already have everything you need. Go build it yourself.
+
+[Loop](https://github.com/satish860/loop) is my implementation — open source, MIT licensed. Read through the eval logic. Understand how the judge works. See how the improvement loop catches patterns. Then build yours in whatever language, with whatever LLM, on whatever documents you care about.
+
+**Don't add it to your 36-tool stack. Replace the stack with the method.**
