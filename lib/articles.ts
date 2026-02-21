@@ -3,6 +3,11 @@ import path from 'path'
 import matter from 'gray-matter'
 import readingTime from 'reading-time'
 
+export interface ArticleFAQ {
+  q: string
+  a: string
+}
+
 export interface ArticleMetadata {
   slug: string
   title: string
@@ -11,6 +16,8 @@ export interface ArticleMetadata {
   excerpt: string
   template?: 'article' | 'short' | 'technical'
   category?: string
+  keywords?: string[]
+  faq?: ArticleFAQ[]
 }
 
 const articlesDirectory = path.join(process.cwd(), 'content/articles')
@@ -44,6 +51,8 @@ export function getArticleBySlug(slug: string) {
       excerpt: data.excerpt || '',
       template: data.template || 'article',
       category: data.category || '',
+      keywords: data.keywords || undefined,
+      faq: data.faq || undefined,
     } as ArticleMetadata,
     content,
   }

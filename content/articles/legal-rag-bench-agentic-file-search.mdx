@@ -4,6 +4,33 @@ date: "2026-02-22"
 excerpt: "Everyone says you need embeddings, vector databases, and retrieval pipelines for RAG. We scored 93% correctness on 100 legal questions using grep and structured prompting. Here's exactly how."
 template: "technical"
 category: "AI Engineering"
+keywords:
+  - "legal RAG benchmark"
+  - "RAG without embeddings"
+  - "agentic RAG"
+  - "legal document AI"
+  - "retrieval augmented generation"
+  - "Legal RAG Bench"
+  - "structured prompting"
+  - "file search vs vector database"
+  - "AI legal research"
+  - "RAG accuracy"
+  - "embedding alternatives"
+  - "agentic file search"
+  - "document intelligence"
+  - "legal AI benchmark"
+  - "RAG pipeline optimization"
+faq:
+  - q: "Can you build RAG without embeddings or a vector database?"
+    a: "Yes. We scored 93% correctness on the Legal RAG Bench benchmark using only grep and file-read tools with structured prompting — no embeddings, no vector database, no chunking. The LLM agent decides what to search for and navigates the raw corpus directly."
+  - q: "How does agentic file search compare to traditional RAG pipelines?"
+    a: "On Legal RAG Bench (100 legal questions), agentic file search scored 93% correctness vs. 83.6% for the best embedding+LLM pipeline (Karon 2 + Gemini 3.1 Pro). Retrieval accuracy was 94% vs. ~91%, and groundedness was 97% vs. ~96%."
+  - q: "What is the ANALYZE phase in structured prompting?"
+    a: "The ANALYZE phase is a prompt engineering technique that forces the LLM to enumerate every rule in a retrieved passage, match each rule to the question's facts, and rank matches by specificity (specific exception beats general principle). Adding this single phase improved accuracy from 67% to 93%."
+  - q: "Why do embeddings fail on legal documents?"
+    a: "Legal text has cross-references between sections, multiple numbered rules in single passages, negation patterns that embedding similarity can't distinguish, and specificity hierarchies where a specific exception should override a general principle. Embeddings rank by similarity, not by legal specificity."
+  - q: "What domains benefit from agentic file search over traditional RAG?"
+    a: "Any domain with multi-rule passages, cross-references, specificity hierarchies, and negation — including financial regulations, aviation lease agreements, insurance policies, compliance frameworks, and medical guidelines."
 ---
 
 93% correctness. 97% groundedness. 94% retrieval accuracy.
@@ -241,6 +268,30 @@ Requires: Node.js, [Pi coding agent SDK](https://github.com/mariozechner/pi-codi
 2. **Pre-built search index** for speed — 77 seconds/question is fine for eval, too slow for production
 3. **Multi-judge ensemble** for edge cases where legal distinctions are genuinely ambiguous
 4. **Test on other legal domains** — contract analysis, regulatory compliance, case law research
+
+---
+
+## Frequently Asked Questions
+
+**Can you build RAG without embeddings or a vector database?**
+
+Yes. We scored 93% correctness on the [Legal RAG Bench](https://isaacus.com/blog/legal-rag-bench) benchmark using only `grep` and file-read tools with structured prompting — no embeddings, no vector database, no chunking. The LLM agent decides what to search for and navigates the raw corpus directly.
+
+**How does agentic file search compare to traditional RAG pipelines?**
+
+On Legal RAG Bench (100 legal questions), agentic file search scored 93% correctness vs. 83.6% for the best embedding+LLM pipeline (Karon 2 Embedder + Gemini 3.1 Pro). Retrieval accuracy was 94% vs. ~91%, and groundedness was 97% vs. ~96%. All results are reproducible — [run the eval yourself](https://github.com/satish860/legal-rag-bench).
+
+**What is the ANALYZE phase in structured prompting?**
+
+The ANALYZE phase is a prompt engineering technique that forces the LLM to enumerate every rule in a retrieved passage, match each rule to the question's facts, and rank matches by specificity (specific exception beats general principle). Adding this single phase improved accuracy from 67% to 93% — a 26 percentage point gain from one prompt change.
+
+**Why do embeddings fail on legal documents?**
+
+Legal text has cross-references between sections, multiple numbered rules in single passages, negation patterns that embedding similarity can't distinguish, and specificity hierarchies where a specific exception should override a general principle. Embeddings rank by similarity, not by legal specificity.
+
+**What domains benefit from agentic file search over traditional RAG?**
+
+Any domain with multi-rule passages, cross-references, specificity hierarchies, and negation — including financial regulations, aviation lease agreements, insurance policies, compliance frameworks, and medical guidelines. The key finding: information retrieval was never the ceiling — reasoning was.
 
 ---
 

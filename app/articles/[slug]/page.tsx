@@ -28,10 +28,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const articleUrl = `https://themindfulai.dev/articles/${slug}`
 
+  // Use article-specific keywords if available, otherwise fall back to generic
+  const defaultKeywords = article.metadata.category
+    ? [article.metadata.category, "AI", "Technology", "Philosophy"]
+    : ["AI", "Technology", "Philosophy"]
+  const keywords = article.metadata.keywords && article.metadata.keywords.length > 0
+    ? article.metadata.keywords
+    : defaultKeywords
+
   return {
     title: article.metadata.title,
     description: article.metadata.excerpt,
-    keywords: article.metadata.category ? [article.metadata.category, "AI", "Technology", "Philosophy"] : ["AI", "Technology", "Philosophy"],
+    keywords,
     authors: [{ name: "The Mindful AI" }],
     openGraph: {
       type: "article",
@@ -122,9 +130,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     },
     wordCount: article.content.split(/\s+/).length,
     articleSection: article.metadata.category || "AI",
-    keywords: article.metadata.category
-      ? [article.metadata.category, "AI", "Artificial Intelligence", "Technology", "Philosophy"]
-      : ["AI", "Artificial Intelligence", "Technology", "Philosophy"],
+    keywords: article.metadata.keywords && article.metadata.keywords.length > 0
+      ? article.metadata.keywords
+      : (article.metadata.category
+        ? [article.metadata.category, "AI", "Artificial Intelligence", "Technology", "Philosophy"]
+        : ["AI", "Artificial Intelligence", "Technology", "Philosophy"]),
     speakable: {
       "@type": "SpeakableSpecification",
       cssSelector: ["h1", ".article-intro", ".article-content h2"],
@@ -152,6 +162,23 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     ]
   }
 
+  // FAQPage schema for GEO optimization (+40% AI visibility per Princeton GEO research)
+  // Parse FAQ entries from frontmatter if available
+  const faqData = article.metadata.faq && Array.isArray(article.metadata.faq) && article.metadata.faq.length > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: article.metadata.faq.map((item: { q: string; a: string }) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.a,
+          },
+        })),
+      }
+    : null
+
   // Get related articles for internal linking
   const relatedArticles = getRelatedArticles(slug, article.metadata.category)
 
@@ -165,6 +192,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbData) }}
       />
+      {faqData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqData) }}
+        />
+      )}
       <ThemeSwitcher />
 
       <div className={`container ${containerClass}`}>
