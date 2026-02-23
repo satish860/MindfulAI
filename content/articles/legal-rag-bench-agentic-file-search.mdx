@@ -24,7 +24,7 @@ faq:
   - q: "Can you build RAG without embeddings or a vector database?"
     a: "Yes. We scored 93% correctness on the Legal RAG Bench benchmark using only grep and file-read tools with structured prompting — no embeddings, no vector database, no chunking. The LLM agent decides what to search for and navigates the raw corpus directly."
   - q: "How does agentic file search compare to traditional RAG pipelines?"
-    a: "On Legal RAG Bench (100 legal questions), agentic file search scored 93% correctness vs. 83.6% for the best embedding+LLM pipeline (Karon 2 + Gemini 3.1 Pro). Retrieval accuracy was 94% vs. ~91%, and groundedness was 97% vs. ~96%."
+    a: "On Legal RAG Bench (100 legal questions), agentic file search with Claude Sonnet 4.6 scored 93% correctness — within 2 points of the best embedding pipeline (Kanon 2 + Gemini 3.1 Pro at 95%) and 16-20 points above every non-Kanon-2 pipeline. Retrieval accuracy was 94% vs. 86% for Kanon 2."
   - q: "What is the ANALYZE phase in structured prompting?"
     a: "The ANALYZE phase is a prompt engineering technique that forces the LLM to enumerate every rule in a retrieved passage, match each rule to the question's facts, and rank matches by specificity (specific exception beats general principle). Adding this single phase improved accuracy from 67% to 93%."
   - q: "Why do embeddings fail on legal documents?"
@@ -33,11 +33,13 @@ faq:
     a: "Any domain with multi-rule passages, cross-references, specificity hierarchies, and negation — including financial regulations, aviation lease agreements, insurance policies, compliance frameworks, and medical guidelines."
 ---
 
+> **Correction (Feb 23, 2026):** The original version of this post reported Isaacus's best result (Kanon 2 + Gemini 3.1 Pro) as 83.6% correctness. The actual number from their [raw results data](https://media.isaacus.com/posts/legal-rag-bench/legal-rag-bench-results.jsonl) is **95%**. Our 93% is 2 points *below* their best, not 10 above. I estimated from the blog text instead of pulling the actual JSONL results file. The numbers, tables, and analysis below have been corrected. The LLM used was Claude Sonnet 4.6. The core finding still holds: agentic file-search with zero embeddings matches or beats 5 of 6 standard pipelines — but Kanon 2's domain-adapted retrieval edges it out on correctness.
+
 93% correctness. 97% groundedness. 94% retrieval accuracy.
 
 100 legal questions. Victorian criminal law — jury directions, evidence rules, homicide defences, drug trafficking, stalking.
 
-No embeddings. No vector database. No retrieval pipeline. Just an AI agent searching a raw JSONL file with `grep` and `read`.
+No embeddings. No vector database. No retrieval pipeline. Just an AI agent (Claude Sonnet 4.6) searching a raw JSONL file with `grep` and `read`.
 
 I'm sharing the exact prompts, the full results, and the code. Run it yourself.
 
@@ -50,15 +52,15 @@ I'm sharing the exact prompts, the full results, and the code. Run it yourself.
 
 [Isaacus](https://isaacus.com/blog/legal-rag-bench) published Legal RAG Bench — a benchmark for testing RAG systems on legal questions. They evaluated 5 standard embedding+LLM pipelines and found that "information retrieval sets the ceiling on the performance of modern legal RAG systems."
 
-Their best result? Karon 2 Embedder + Gemini 3.1 Pro at **83.6%** correctness.
+Their best result? Kanon 2 Embedder + Gemini 3.1 Pro at **95%** correctness.
 
 We took the same corpus, the same 100 questions, and threw away the entire retrieval stack.
 
 No embedding model. No chunking. No vector similarity. No top-k retrieval.
 
-Instead: one AI agent per question, with access to `grep` and `read`, searching the raw corpus file directly. The LLM decides what to search for, what to read, and what to look at next.
+Instead: one AI agent (Claude Sonnet 4.6) per question, with access to `grep` and `read`, searching the raw corpus file directly. The LLM decides what to search for, what to read, and what to look at next.
 
-**93% correctness.** Ten points above their best.
+**93% correctness.** Within 2 points of their best pipeline — and 16-20 points above every non-Kanon-2 pipeline. With zero embeddings.
 
 ---
 
@@ -164,31 +166,38 @@ Same corpus. Same questions. Different architecture.
 
 | System | Score |
 |--------|-------|
-| **Ours (agentic file-search)** | **93%** |
-| Karon 2 + Gemini 3.1 Pro | 83.6% |
-| Karon 2 + GPT-5.2 | ~80% |
-| Text Emb. 3 + Gemini 3.1 Pro | ~78% |
-| Gemini Emb. + GPT-5.2 | ~67% |
+| Kanon 2 + Gemini 3.1 Pro | **95%** |
+| **Ours (agentic file-search, Claude Sonnet 4.6)** | **93%** |
+| Kanon 2 + GPT-5.2 | 93% |
+| Text Emb. 3 Large + Gemini 3.1 Pro | 77% |
+| Text Emb. 3 Large + GPT-5.2 | 76% |
+| Gemini Emb. 001 + Gemini 3.1 Pro | 75% |
+| Gemini Emb. 001 + GPT-5.2 | 73% |
 
 ### Groundedness (answer supported by evidence)
 
 | System | Score |
 |--------|-------|
+| Kanon 2 + GPT-5.2 | **97%** |
 | **Ours** | **97%** |
-| Karon 2 + Gemini 3.1 Pro | ~96% |
-| Others | ~74-89% |
+| Text Emb. 3 Large + Gemini 3.1 Pro | 96% |
+| Kanon 2 + Gemini 3.1 Pro | 95% |
+| Gemini Emb. 001 + Gemini 3.1 Pro | 92% |
+| Text Emb. 3 Large + GPT-5.2 | 87% |
+| Gemini Emb. 001 + GPT-5.2 | 82% |
 
 ### Retrieval Accuracy (correct passage found)
 
 | System | Score |
 |--------|-------|
 | **Ours** | **94%** |
-| Karon 2 Embedder (top) | ~91% |
-| Gemini Embedding 001 (top) | ~88% |
+| Kanon 2 Embedder | 86% |
+| Gemini Emb. 001 | 53% |
+| Text Emb. 3 Large | 52% |
 
-Zero retrieval errors. Every incorrect answer was a reasoning mistake, not a retrieval failure.
+Our retrieval accuracy (94%) beats every embedding model — including Kanon 2 (86%). Every incorrect answer was a reasoning mistake, not a retrieval failure.
 
-*Isaacus scores estimated from their published blog and relative figures. Their interactive explorer has per-question breakdowns. Exact numbers may vary slightly. Source: [isaacus.com/blog/legal-rag-bench](https://isaacus.com/blog/legal-rag-bench)*
+*Isaacus scores computed from their raw results file: [legal-rag-bench-results.jsonl](https://media.isaacus.com/posts/legal-rag-bench/legal-rag-bench-results.jsonl) (600 evaluations, 100 questions × 6 model combinations). Source: [isaacus.com/blog/legal-rag-bench](https://isaacus.com/blog/legal-rag-bench)*
 
 ---
 
@@ -219,11 +228,11 @@ All 7 involve subtle legal distinctions where the agent drew the wrong conclusio
 
 ## Why This Matters Beyond Legal
 
-The key finding isn't "file search beats embeddings on legal docs."
+The key finding isn't "file search beats embeddings on legal docs." Kanon 2 + Gemini 3.1 Pro at 95% correctness is the best pipeline tested.
 
-It's this: **information retrieval was never the ceiling. Reasoning was.**
+It's this: **you can get within 2 points of the best embedding pipeline with zero embeddings — and structured reasoning is what closes the gap.**
 
-Isaacus concluded that "information retrieval sets the ceiling on the performance of modern legal RAG systems." Our results suggest the opposite. With zero retrieval errors, the ceiling is reasoning quality — and structured prompting (the ANALYZE phase) raises that ceiling significantly.
+Isaacus concluded that "information retrieval sets the ceiling on the performance of modern legal RAG systems." Our results partially confirm and partially challenge this. Kanon 2's domain-adapted retrieval + Gemini 3.1 Pro's reasoning achieved 95% — the highest score. But our approach, with zero embeddings, hit 93% by investing entirely in structured reasoning. Against non-domain-adapted embeddings (Text Embedding 3 Large, Gemini Embedding 001), the agentic approach wins decisively — 16-20 points higher. The takeaway: if you have access to a domain-adapted legal embedder like Kanon 2, use it. If you don't, structured reasoning can close most of the gap.
 
 This applies to any domain where documents have:
 - Multiple rules/principles in a single passage
@@ -279,7 +288,7 @@ Yes. We scored 93% correctness on the [Legal RAG Bench](https://isaacus.com/blog
 
 **How does agentic file search compare to traditional RAG pipelines?**
 
-On Legal RAG Bench (100 legal questions), agentic file search scored 93% correctness vs. 83.6% for the best embedding+LLM pipeline (Karon 2 Embedder + Gemini 3.1 Pro). Retrieval accuracy was 94% vs. ~91%, and groundedness was 97% vs. ~96%. All results are reproducible — [run the eval yourself](https://github.com/satish860/legal-rag-bench).
+On Legal RAG Bench (100 legal questions), agentic file search with Claude Sonnet 4.6 scored 93% correctness — within 2 points of the best embedding pipeline (Kanon 2 + Gemini 3.1 Pro at 95%) and 16-20 points above every non-Kanon-2 pipeline. Retrieval accuracy was 94% vs. 86% for Kanon 2, and groundedness was 97%. All results are reproducible — [run the eval yourself](https://github.com/satish860/legal-rag-bench).
 
 **What is the ANALYZE phase in structured prompting?**
 
