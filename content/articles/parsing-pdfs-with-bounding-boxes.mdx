@@ -1,0 +1,195 @@
+---
+title: "PDF Parsing With Bounding Boxes: The Step That Takes Document AI From Demo to Production"
+date: 2026-04-02
+excerpt: "Most PDF parsers give you text but lose where it came from. Here's how to get every word with its exact position on the page — so you can build citations, highlight sources, and actually prove your extractions."
+template: "technical"
+category: "AI Engineering"
+---
+
+![Page with bounding boxes highlighted](/images/pdf-parsing-highlighted-page.png)
+*A legislative comparison table. 299 words on this page — every one tagged with its exact position. Headings, table cells, footnotes. Nothing lost.*
+
+---
+
+## You've Been Throwing Away the Most Useful Part
+
+You parse a PDF. You get text back. A big string.
+
+Somewhere in that string is "Lease Start Date: 15 March 2019." You extracted it. You're happy.
+
+Then a user asks: **where did you find that?**
+
+Which page? Which paragraph? Show me. Point to it. Prove it.
+
+You can't. Because your parser threw away the positions. It gave you the words but not the coordinates. The *where* is gone.
+
+If you're building document extraction for anything serious — aviation, finance, legal, compliance — this is the moment things break. A date that triggers a $400,000 payment needs to be verifiable. "It's in the document somewhere" isn't good enough.
+
+I spent months dealing with this. Parsing PDFs, extracting values, then having no way to trace a result back to its source on the page. The extraction was right, but I couldn't prove it. Not to users, not to auditors, not to myself.
+
+The fix turned out to be surprisingly simple.
+
+---
+
+## Three Commands
+
+```bash
+npm i -g @llamaindex/liteparse
+
+lit parse document.pdf --format json -o parsed.json -q
+```
+
+Open `parsed.json`. Every text fragment has a bounding box:
+
+```json
+{
+  "text": "ADDENDUM ",
+  "x": 248.28,
+  "y": 135.01,
+  "width": 60.49,
+  "height": 9.96,
+  "fontSize": 9.96,
+  "confidence": 1.0
+}
+```
+
+`x`, `y` — where on the page, in PDF points.  
+`width`, `height` — the bounding box.  
+`confidence` — 1.0 means native text. Lower means OCR.
+
+That's it. [LiteParse](https://github.com/run-llama/liteparse) is open-source, runs locally, costs nothing. Parse a PDF, get positions.
+
+The relief is immediate. Every extracted value now carries coordinates. Record which textItems contributed to an extraction. Each one has a page number and a rectangle. That rectangle is your citation.
+
+---
+
+## What This Unlocks
+
+**Citations.** Extract "Monthly Rent: $285,000" → record the source textItems → draw highlight boxes on a page screenshot → the user sees exactly where it came from.
+
+**Spatial search.** Find all words on the same line. Find all words in a region. Find the value to the right of a label. PDF extraction becomes coordinate geometry, not string matching.
+
+**Structure detection.** Large `fontSize` = headings. Aligned `x` positions = table columns. Clustered `y` values = paragraphs. The positions tell you what the document *means*, not just what it says.
+
+**Confidence filtering.** On scanned documents, OCR results come back with confidence scores. Flag low-confidence words for human review instead of silently accepting them.
+
+---
+
+## One Thing to Know About Fragments
+
+PDF textItems are not words. "ADDENDUM LETTER" is two items:
+
+```json
+{ "text": "ADDENDUM ", "x": 248.28 }
+{ "text": "LETTER",    "x": 308.77 }
+```
+
+One word can be three fragments. Three words can be one fragment. This depends on how the PDF was authored — not on the parser. Keep this in mind when your extraction logic searches for phrases.
+
+---
+
+## The Scanned PDF Problem
+
+Text PDFs work immediately. But scanned PDFs — old signed leases, faxed court orders, stamped certificates — have no text layer. They're photographs. LiteParse returns an empty array.
+
+In production, 30-50% of the documents we receive are scanned. You can't just skip them.
+
+LiteParse handles this with built-in Tesseract.js OCR. Same command, no extra setup:
+
+```bash
+lit parse scanned.pdf --format json -o parsed.json -q
+```
+
+Pages with native text are parsed directly (free, instant). Pages with no text layer go through Tesseract automatically. You get textItems with bounding boxes either way — native text at confidence 1.0, OCR results at lower confidence.
+
+For most documents, this is enough.
+
+---
+
+## When You Need More
+
+Tesseract struggles with faded scans, skewed pages, and handwritten annotations. When quality matters, LiteParse supports plugging in a better OCR engine through `--ocr-server-url`.
+
+We use Azure Document Intelligence in production. The difference on messy scans is significant — higher accuracy, word-level polygons, plus table detection, key-value pairs, and paragraph roles (title, heading, footnote) that you don't get from Tesseract.
+
+The pattern: a small HTTP bridge server sits between LiteParse and Azure. LiteParse sends page images. The bridge forwards them to Azure, converts the response to LiteParse's format, and returns word-level bounding boxes. LiteParse doesn't know Azure is involved.
+
+```bash
+# Terminal 1: start the bridge
+node azure-ocr-bridge.mjs
+
+# Terminal 2: parse through it
+lit parse scanned.pdf --format json -o parsed.json --ocr-server-url http://localhost:8080/ocr -q
+```
+
+The scanned document that returned 0 items now returns hundreds of words with positions.
+
+The bridge is [~80 lines of Express](https://gist.github.com/satish860/b7a7844b8a51a4cc92a2eab7161c6cfc). Swap Azure for AWS Textract or Google Document AI by swapping the bridge. LiteParse doesn't change. Your extraction code doesn't change.
+
+**This is optional.** Built-in Tesseract handles most scanned documents. The Azure bridge is for when you need production-grade OCR on difficult scans.
+
+---
+
+## Smart Routing
+
+One more thing that matters at scale. Not every page needs OCR.
+
+Parse natively first — it's free and instant. Check each page. Only send the scanned pages to OCR. A 50-page document where 45 pages are text and 5 are scanned signatures costs you 5 OCR calls, not 50.
+
+```javascript
+const parser = new LiteParse({ ocrEnabled: false, outputFormat: "json" });
+const result = await parser.parse("document.pdf", true);
+
+for (const page of result.pages) {
+  if (page.text.length > 50) {
+    // Native text — use directly, free
+  } else {
+    // Scanned — route to OCR
+  }
+}
+```
+
+---
+
+## Drawing the Highlights
+
+The image at the top of this post was generated by compositing SVG rectangles on a LiteParse page screenshot.
+
+```bash
+lit screenshot document.pdf --dpi 150 -o ./screenshots
+node highlight-bboxes.mjs parsed.json screenshots/page-1.png highlighted.png
+```
+
+The [highlight script](https://gist.github.com/satish860/fc7fc5665d864f9f6f0267006a750652) is ~30 lines. It reads the JSON, scales coordinates from PDF points to screenshot pixels (`150 / 72 ≈ 2.083`), draws colored rectangles with Sharp. Green for high confidence, yellow for medium, red for low.
+
+![Zoomed bounding boxes on individual words](/images/pdf-parsing-zoomed-boxes.png)
+*Every word is its own rectangle. "CLAUSES" is one box. "Offence" and "requiring" are separate. The clause numbers each have their own position.*
+
+On text PDFs, everything is green. On scanned PDFs, you see a mix — immediately telling you which words the OCR was less sure about.
+
+---
+
+## The Line Between Demo and Production
+
+Every document AI demo looks impressive. Upload a PDF, get a table of extracted values, everyone claps.
+
+Then someone asks: *where did you find that number?*
+
+The demo can't answer. It extracted the value but didn't record where it came from. There's no page number, no highlight, no proof. The extraction might be right — but nobody can verify it without reading the entire document again.
+
+That's the line between a demo and a production system. **The ability to show proof.**
+
+Production means an auditor can click on any extracted value and see the exact spot on the page where the AI found it. Production means a compliance officer can verify a regulatory date without opening the 300-page source document. Production means the system doesn't just give answers — it shows its work.
+
+Bounding boxes are what make this possible. Not as a feature. As the foundation.
+
+Parse → get positions → extract → cite the source → draw the proof.
+
+Not "the AI said so."  
+"The AI said so — and here's the exact rectangle on page 47 where it found it."
+
+That's what turns extraction from a demo into something you can actually ship.
+
+---
+
+*[LiteParse](https://github.com/run-llama/liteparse) · [Azure OCR Bridge](https://gist.github.com/satish860/b7a7844b8a51a4cc92a2eab7161c6cfc) · [Highlight Script](https://gist.github.com/satish860/fc7fc5665d864f9f6f0267006a750652) · [Azure Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/)*
