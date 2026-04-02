@@ -7,7 +7,7 @@ category: "AI Engineering"
 ---
 
 ![Page with bounding boxes highlighted](/images/pdf-parsing-highlighted-page.png)
-*A legislative comparison table. 299 words on this page — every one tagged with its exact position. Headings, table cells, footnotes. Nothing lost.*
+*An FAA Advisory Circular on Air Carrier Maintenance Programs. 858 words on this page — every one tagged with its exact position. Section headings, CFR references, regulatory text. Nothing lost.*
 
 ---
 
@@ -163,7 +163,7 @@ node highlight-bboxes.mjs parsed.json screenshots/page-1.png highlighted.png
 The [highlight script](https://gist.github.com/satish860/fc7fc5665d864f9f6f0267006a750652) is ~30 lines. It reads the JSON, scales coordinates from PDF points to screenshot pixels (`150 / 72 ≈ 2.083`), draws colored rectangles with Sharp. Green for high confidence, yellow for medium, red for low.
 
 ![Zoomed bounding boxes on individual words](/images/pdf-parsing-zoomed-boxes.png)
-*Every word is its own rectangle. "CLAUSES" is one box. "Offence" and "requiring" are separate. The clause numbers each have their own position.*
+*Every word is its own rectangle. "CHAPTER", "1.", "GENERAL", "INFORMATION" — four separate boxes. Section numbers, bold headings, body text — all individually positioned.*
 
 On text PDFs, everything is green. On scanned PDFs, you see a mix — immediately telling you which words the OCR was less sure about.
 
