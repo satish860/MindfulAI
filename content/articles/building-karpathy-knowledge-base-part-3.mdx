@@ -1,0 +1,183 @@
+---
+title: "Building Karpathy's Knowledge Base — Part 3: Every Query Makes It Smarter"
+date: 2026-04-06
+excerpt: "Most AI Q&A systems forget everything after each session. This one files answers back into the wiki and re-indexes. Every question compounds. Two modes — query (read-only) and research (read+write) — same function, different tool permissions."
+template: "technical"
+category: "AI Engineering"
+tags: ["RAG", "knowledge-base", "LLM", "pi-sdk", "document-ai", "karpathy", "compounding"]
+---
+
+Most AI Q&A systems forget everything after each session. You ask a question, get an answer, close the chat. Next session starts from zero.
+
+Karpathy's [LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) describes something different:
+
+> *"Often, I end up 'filing' the outputs back into the wiki to enhance it for further queries. So my own explorations and queries always 'add up' in the knowledge base."*
+
+That's the compounding loop. The answer IS the knowledge base. Every query makes the next one smarter.
+
+[Part 1](/articles/building-karpathy-knowledge-base-part-1) explained why this works without embeddings. [Part 2](/articles/building-karpathy-knowledge-base-part-2) showed how Pi SDK sessions replace the RAG pipeline. This post adds the query engine — and the compounding loop that makes it all worth building.
+
+---
+
+## Two modes, one function
+
+```bash
+# Query — read-only, answers in terminal
+llm-kb query "what are the reserve requirements?"
+
+# Research — read+write, answer saved to wiki
+llm-kb query "compare Q3 vs Q4 guidance" --save
+```
+
+Both modes are the same `createAgentSession()` call. The only difference is which tools the session gets:
+
+| Mode | Tools | What happens |
+|------|-------|-------------|
+| **Query** | read | Agent reads index → picks files → answers |
+| **Research** | read + write + bash | Same, but saves the answer to `wiki/outputs/` and re-indexes |
+
+Query mode literally cannot modify your files — the agent has no write tool. Research mode can write, but only to `outputs/`. Your source documents are never touched in either mode.
+
+This is the same pattern from [Part 2](/articles/building-karpathy-knowledge-base-part-2). The indexer is a session with read+write+bash. The query agent is a session with read-only. The research agent is a session with read+write+bash. Same function, different permissions. That's the whole architecture.
+
+---
+
+## How file selection works in practice
+
+When you ask a question, the agent doesn't read every document. It reads `index.md` first — about 200 tokens for 50 sources — and picks 2-5 files that match:
+
+```
+llm-kb query "what changed in Q4 guidance?"
+```
+
+```
+Reading index... 12 sources
+Selected: q3-results.md, board-deck.md
+
+Q4 guidance is addressed in two documents:
+
+1. **Q3 Financial Results** (q3-results.md, p.4):
+   Management maintained flat Q4 guidance at $2.3M,
+   citing "macro uncertainty."
+
+2. **Board Presentation** (board-deck.md, slide 6):
+   The board approved a strategy shift to enterprise,
+   expected to "positively impact Q4 pipeline within
+   60 days."
+
+These aren't contradictory — the flat guidance predates
+the strategy decision.
+
+Sources: q3-results.md (p.4), board-deck.md (slide 6)
+```
+
+The agent skipped `pipeline.md` because its index summary didn't mention guidance or revenue targets. That's [LLM judgment on summaries](/articles/building-karpathy-knowledge-base-part-1#how-retrieval-works-without-embeddings) — no cosine similarity, no embeddings. The LLM reads the table and decides.
+
+---
+
+## The compounding loop
+
+This is where it gets interesting. Add `--save` and the answer doesn't just appear in your terminal — it gets filed into the wiki:
+
+```bash
+llm-kb query "compare pipeline coverage to revenue target" --save
+```
+
+The agent reads sources, writes the analysis, saves it to `.llm-kb/wiki/outputs/coverage-analysis.md`, and re-indexes. The index now has a new row:
+
+```markdown
+| coverage-analysis.md | Analysis | Pipeline covers 1.8x of Q4 target | pipeline, revenue, coverage |
+```
+
+Next time you ask about pipeline or revenue, the agent finds this analysis in the index and builds on it instead of starting from scratch. Your questions compound.
+
+This is the loop Karpathy describes. The wiki isn't static — it grows with every research query. The more you use it, the better it gets.
+
+---
+
+## The injected AGENTS.md
+
+Each mode gets a different `AGENTS.md` injected at runtime via `agentsFilesOverride`. The query instructions are straightforward:
+
+```markdown
+# llm-kb Knowledge Base — Query Mode
+
+## How to answer questions
+1. FIRST read .llm-kb/wiki/index.md
+2. Select the most relevant source files (usually 2-5)
+3. Read those files in full
+4. Answer with inline citations: (filename, page number)
+5. If you can't find the answer, say so — don't hallucinate
+
+## Rules
+- Prefer primary sources over previous analyses
+- Read the FULL source file, not just the beginning
+```
+
+Research mode adds one section:
+
+```markdown
+## Research Mode
+Save your analysis to .llm-kb/wiki/outputs/
+with a descriptive filename. Include citations.
+```
+
+That's it. The same `createAgentSession()`, different AGENTS.md content, different tools. The re-index after save is one line:
+
+```typescript
+if (options.save) {
+  await buildIndex(folder, sourcesDir);
+}
+```
+
+The compounding loop is not a feature. It's a side effect of the architecture.
+
+---
+
+## Auto-detect your knowledge base
+
+One small UX detail that matters: you don't need to specify `--folder` every time. The CLI walks up from your current directory looking for `.llm-kb/`:
+
+```bash
+cd ~/research/subfolder
+llm-kb query "what changed?"  # finds ~/research/.llm-kb/ automatically
+```
+
+If you're anywhere inside the document folder, it works. If you're outside, use `--folder`.
+
+---
+
+## Non-PDF files at query time
+
+The ingest pipeline [only pre-parses PDFs](/articles/building-karpathy-knowledge-base-part-2#why-only-pdfs-get-pre-parsed-at-ingest-time). But the query agent can read anything — in research mode, it has bash and can write scripts using bundled libraries (ExcelJS, Mammoth, OfficeParser).
+
+Ask about a spreadsheet and the agent writes a quick Node.js script, reads the data, and answers. No pre-parsing needed. The libraries ship with llm-kb — nothing extra to install.
+
+---
+
+## Try it
+
+```bash
+npm install -g llm-kb
+
+# Ingest
+llm-kb run ./my-documents
+
+# Query (read-only)
+llm-kb query "what are the key findings?"
+
+# Research (compounds)
+llm-kb query "compare X vs Y" --save
+```
+
+Three commands. Ingest → Query → Research. Each research query makes the next one smarter.
+
+Part 4 adds the eval loop — how do you know the answers are right?
+
+[GitHub →](https://github.com/satish860/llm-kb)
+
+---
+
+**Related:** [Part 1: No Embeddings](/articles/building-karpathy-knowledge-base-part-1) · [Part 2: Pi SDK Sessions as RAG](/articles/building-karpathy-knowledge-base-part-2) · [PDF Parsing With Bounding Boxes](/articles/parsing-pdfs-with-bounding-boxes)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [Karpathy's gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)*
