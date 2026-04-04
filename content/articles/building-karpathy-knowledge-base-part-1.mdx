@@ -1,22 +1,23 @@
 ---
 title: "Building Karpathy's Knowledge Base Without Embeddings"
 date: 2026-04-03
-excerpt: "Karpathy wants LLM knowledge bases. Everyone's reaching for vector databases. I built one with markdown files — no embeddings, no Pinecone, no chunking strategy debates. Here's why it works."
+excerpt: "How to build an LLM knowledge base without embeddings or a vector database. I replaced the standard RAG pipeline — chunking, embedding, similarity search — with an LLM that reads a markdown summary table and selects which documents to read in full. Working code included."
 template: "technical"
 category: "AI Engineering"
+tags: ["RAG", "embeddings", "knowledge-base", "LLM", "document-ai", "pi-sdk", "karpathy"]
 ---
 
 I've re-read the same 300-page lease four times this year. Not because I forgot what's in it. Because my tools forgot.
 
 Andrej Karpathy [posted](https://x.com/karpathy/status/2039805659525644595) about the same frustration:
 
-![Karpathy's tweet on LLM Knowledge Bases](/images/karpathy-tweet-cropped.png)
+![Andrej Karpathy's tweet about building LLM-powered knowledge bases by dumping documents into a folder and compiling them into a wiki](/images/karpathy-tweet-cropped.png)
 
 Dump documents into a folder. An LLM compiles them into a wiki. Ask questions. He called it "a hacky collection of scripts" and said there's room for "an incredible new product."
 
 [@jumperz](https://x.com/jumperz/status/2039826228224430323) drew the best summary:
 
-![Karpathy's LLM Knowledge Base — module architecture](/images/Modules.jpg)
+![Architecture diagram of Karpathy's LLM Knowledge Base showing the flow from sources to raw files to wiki to Q&A to output](/images/Modules.jpg)
 *Sources → raw/ → Wiki → Q&A → Output. The LLM writes everything. You just steer. Credit: [@jumperz](https://x.com/jumperz/status/2039826228224430323)*
 
 I looked at the replies. Everyone's reaching for vector databases, embedding pipelines, chunking strategies.
@@ -27,7 +28,7 @@ So instead of answering one more time, I'm building it in public. Working code. 
 
 ---
 
-## The standard approach has too many decisions
+## Why embeddings and chunking fail for knowledge bases
 
 Ask "how do I build Q&A over documents" and you'll get this:
 
@@ -42,7 +43,7 @@ And here's what nobody talks about: **chunking destroys context.** You take a 30
 
 I [wrote about this in detail](/articles/why-i-stopped-using-rag-for-document-processing) — the retriever and the reasoner are different systems, and the retriever guesses wrong on anything that requires cross-referencing.
 
-## What I do instead
+## How retrieval works without embeddings
 
 ```
 Docs → Parse → Summarize → index.md
@@ -78,7 +79,7 @@ That's what the LLM does. And at this scale, its judgment is better than cosine 
 
 The right infrastructure is the least infrastructure that solves the problem. If I outgrow this, I add retrieval. The agent already reads files through tools — swapping "read file" for "search index" changes one component, not the architecture.
 
-## The architecture
+## Architecture: file watcher, agent sessions, eval loop
 
 Three zones. [Part 2](/articles/building-karpathy-knowledge-base-part-2) shows how Pi SDK sessions make this work with almost no code:
 
@@ -102,9 +103,9 @@ Three zones. [Part 2](/articles/building-karpathy-knowledge-base-part-2) shows h
 
 The eval loop matters because of a question nobody in the Karpathy thread is asking: **how do you know the wiki is right?** An LLM compiles 100 articles into summaries — did it get the facts right? Every query gets traced. The eval agent checks citations against source files. I wrote about [why bounding boxes matter for verification](/articles/parsing-pdfs-with-bounding-boxes) — per-word coordinates let you confirm that a cited page actually says what the LLM claims.
 
-## Try it
+## Try it: one command to start
 
-The ingest pipeline is working today:
+The ingest pipeline is working today. No vector database to set up. No embedding model to choose. No chunking strategy to debate:
 
 ```bash
 npx llm-kb run ./my-documents
@@ -142,5 +143,7 @@ Each post ships working code:
 [GitHub →](https://github.com/satish860/llm-kb)
 
 ---
+
+**Related:** [Why I Stopped Using RAG for Document Processing](/articles/why-i-stopped-using-rag-for-document-processing) · [PDF Parsing With Bounding Boxes](/articles/parsing-pdfs-with-bounding-boxes)
 
 *[Pi SDK](https://github.com/mariozechner/pi) · [LiteParse](https://github.com/run-llama/liteparse) · [Karpathy's post](https://x.com/karpathy/status/2039805659525644595)*

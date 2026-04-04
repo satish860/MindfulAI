@@ -1,18 +1,21 @@
 ---
 title: "Building Karpathy's Knowledge Base — Pi SDK Sessions as RAG"
 date: 2026-04-05
-excerpt: "You don't need LangChain or a vector database. A Pi SDK session that can read files IS a retrieval system. Here's how to build Karpathy's knowledge base with tool-scoped agent sessions."
+excerpt: "How to build a RAG system using Pi SDK agent sessions instead of a vector database. Each session is a createAgentSession() call with different tool permissions — the indexer writes, the query agent reads, the eval agent checks citations. No LangChain. No orchestration framework. Working TypeScript code."
 template: "technical"
 category: "AI Engineering"
+tags: ["RAG", "pi-sdk", "agent-sessions", "knowledge-base", "LLM", "document-ai", "typescript"]
 ---
 
 [Part 1](/articles/building-karpathy-knowledge-base-part-1) argued you don't need embeddings for a personal knowledge base. An LLM reading a markdown index table picks the right files better than cosine similarity — at small scale.
 
-This post is the how. And the answer is simpler than I expected: **a Pi SDK session that can read files IS a retrieval system.** You don't need LangChain. You don't need a retrieval pipeline. You need an agent with tool permissions.
+This post is the how. And the answer is simpler than I expected: **a [Pi SDK](https://github.com/mariozechner/pi) agent session that can read files IS a retrieval system.** You don't need LangChain. You don't need a retrieval pipeline. You need an agent with tool permissions.
+
+The entire RAG architecture — indexing, retrieval, generation, evaluation — is four calls to the same function with different tool configurations.
 
 ---
 
-## Sessions are the architecture
+## Agent sessions replace the RAG pipeline
 
 The whole system is just sessions with different tool access:
 
@@ -38,7 +41,7 @@ This is RAG without the R being a separate system. The retrieval IS the agent re
 
 ---
 
-## The indexer is the interesting part
+## The indexer: how LLM-powered file selection works
 
 The indexer session is what makes [the no-embeddings approach](/articles/building-karpathy-knowledge-base-part-1#what-i-do-instead) work. It reads every source file, writes a one-line summary and topic keywords, and produces the index table that powers file selection at query time.
 
@@ -87,7 +90,7 @@ The same pattern works for query, research, and eval. Different `AGENTS.md` cont
 
 ---
 
-## The ingest pipeline
+## The ingest pipeline: scan, parse, index, watch
 
 Four things happen when you run `npx llm-kb run`:
 
@@ -112,7 +115,7 @@ Scanning ./research...
   Watching for new files... (Ctrl+C to stop)
 ```
 
-## Why only PDFs get pre-parsed
+## Why only PDFs get pre-parsed at ingest time
 
 I started with adapters for Excel, Word, and PowerPoint. Three more dependencies, three more edge cases. Then I realized the agent already has tools.
 
@@ -124,7 +127,7 @@ Cutting three adapters halved the codebase. The agent with tools replaced all of
 
 ---
 
-## Try it
+## Try it: build a knowledge base in one command
 
 ```bash
 npm install -g @mariozechner/pi-coding-agent
@@ -138,4 +141,6 @@ Part 3 adds the query session — ask questions across all your documents from t
 
 ---
 
-*[Part 1: No Embeddings](/articles/building-karpathy-knowledge-base-part-1) · [GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [LiteParse](https://github.com/run-llama/liteparse)*
+**Related:** [Part 1: No Embeddings](/articles/building-karpathy-knowledge-base-part-1) · [Why I Stopped Using RAG](/articles/why-i-stopped-using-rag-for-document-processing) · [PDF Parsing With Bounding Boxes](/articles/parsing-pdfs-with-bounding-boxes)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [LiteParse](https://github.com/run-llama/liteparse)*
