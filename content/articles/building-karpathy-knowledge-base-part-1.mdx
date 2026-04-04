@@ -1,0 +1,224 @@
+---
+title: "Building Karpathy's LLM Knowledge Base With Pi SDK — Part 1: Architecture"
+date: 2026-04-03
+excerpt: "I tried to turn Karpathy's 'hacky scripts' idea into a self-hosted architecture. This is the smallest version I think is useful: file watcher, markdown wiki, tool-scoped sessions, and an eval loop."
+template: "technical"
+category: "AI Engineering"
+---
+
+I've re-read the same 300-page lease four times this year.
+
+Not because I forgot what's in it. Because my tools forgot. Every new session, every context reset, every "let me re-read that for you" — the AI starts from zero. I spend more tokens rebuilding context than extracting value.
+
+Andrej Karpathy [posted](https://x.com/karpathy/status/2039805659525644595) about the same frustration, but for research:
+
+![Karpathy's tweet on LLM Knowledge Bases](/images/karpathy-tweet-cropped.png)
+
+Dump documents into a folder. An LLM compiles them into a wiki. Ask questions. Every answer makes the wiki smarter. He called it "a hacky collection of scripts" and said there's room for "an incredible new product."
+
+[@jumperz](https://x.com/jumperz/status/2039826228224430323) drew the best summary of Karpathy's system:
+
+![Karpathy's LLM Knowledge Base — module architecture](/images/Modules.jpg)
+*Sources → raw/ → Wiki → Q&A → Output. The LLM writes everything. You just steer. Credit: [@jumperz](https://x.com/jumperz/status/2039826228224430323)*
+
+I tried to turn this into a self-hosted architecture. This is the smallest version I think is useful. This post is the architecture and the tradeoffs. Code starts in Part 2.
+
+---
+
+## The Constraint That Shapes Everything
+
+Here's what nobody in the Karpathy thread is talking about: **how do you know the wiki is right?**
+
+An LLM compiles 100 articles into summaries. Beautiful. But did it get the facts right? Did it miss a key detail in source 47? Did it contradict itself between two summaries?
+
+Karpathy can eyeball it — he's one researcher. A product serving multiple users can't. You need the system to check itself.
+
+That constraint — **the system must know when it's wrong** — shaped every decision below.
+
+---
+
+## The Architecture
+
+![Knowledge Base Architecture](/images/kb-architecture.png)
+
+Three zones inside one Docker container.
+
+**File Watcher** — detects new files in `/data/incoming/`. PDFs go through LiteParse, Excel through ExcelJS, Word through Mammoth. Everything outputs markdown to `wiki/sources/`. When a new source appears, the indexer updates `index.md`.
+
+Why a file watcher and not an upload API? Because the watcher also monitors `wiki/outputs/`. When the Q&A agent saves a research answer, the watcher detects it and re-indexes. When the eval agent writes a report, same thing. One mechanism handles both user input and system output.
+
+**Next.js App** — `/query` runs with read-only tools. `/research` runs with coding tools so the agent can write answers back to the wiki. The tool scoping is the security boundary — `/query` literally cannot modify source documents, `/research` can only write to `outputs/`. Uploaded docs are parsed, never executed.
+
+**Eval Loop** — every query logs a trace (query text, files read, answer, citations, latency, tokens). The eval agent reads traces, checks answers against cited sources, and writes a report to `wiki/outputs/`. More on what "checks" means below.
+
+Why one container? Simplicity for self-hosted deployment. If you need multi-user scale, split watcher/app/eval into services. But for personal/team use, one container with a volume mount is the smallest useful unit.
+
+---
+
+## How File Selection Actually Works
+
+This is the part that sounds hand-wavy until you see it.
+
+`index.md` is a table. Each row has a filename, one-line summary, and topic keywords:
+
+```markdown
+| Source | Type | Summary | Topics |
+|--------|------|---------|--------|
+| q3-results.md | PDF | Q3 revenue $2.3M, 12% YoY growth, flat Q4 guidance | finance, quarterly, guidance |
+| pipeline.md | Excel | 142 deals across 4 regions, $4.1M weighted pipeline | sales, pipeline, regional |
+| board-deck.md | PPTX | Strategy shift to enterprise, 3 new hires planned | strategy, hiring, enterprise |
+```
+
+When you ask "What changed in Q4 revenue guidance?", the agent reads this table (~200 tokens for 50 sources), matches "Q4" and "guidance" to `q3-results.md` and "strategy" to `board-deck.md`, then reads those two files. Not all three. Not the whole wiki.
+
+The model selects files directly — it reads the index table and decides which sources are relevant to the query. No keyword filtering. No embedding similarity. Just an LLM reading a summary table and making a judgment call. For 50-200 documents, this works well. The model reads 3-7 files per query on average.
+
+This is still retrieval. It's just retrieval by LLM judgment on summaries, not by vector similarity on embeddings. Simpler infrastructure, comparable quality at this scale. Worse recall at large scale. That's the tradeoff we're making deliberately.
+
+---
+
+## When This Works / When It Breaks
+
+**Works well for:**
+- Personal or team knowledge bases, 50-500 documents
+- High-value documents worth reading in full (not throwaway content)
+- Evolving knowledge where synthesis matters more than search
+- Project-scoped corpora where every document is relevant
+
+**Breaks down when:**
+- Corpus exceeds ~500 documents — index.md becomes too large, file selection gets noisy
+- Token costs spike — each query reads the index plus 3-7 full source files
+- Long-tail recall matters — if you need to find one sentence across 5,000 documents, vector search wins
+- Real-time freshness matters — the file watcher + indexer adds seconds of latency on new docs
+
+**Is this just RAG with markdown files?** Sort of. It's retrieval by LLM-read summaries instead of by vector similarity. The wiki structure (index + sources + outputs) replaces the vector store. The advantage is simplicity and synthesis — the index is human-readable, the sources are editable, and the outputs compound. The disadvantage is scale. If we outgrow this, we add retrieval. The agent already reads files through tools — swap "read file" for "search index" and the rest doesn't change.
+
+---
+
+## A Concrete Walkthrough
+
+Drop three files into `/data/incoming/`:
+- `q3-results.pdf` — quarterly financial report
+- `pipeline.xlsx` — sales pipeline by region
+- `board-deck.pptx` — board presentation
+
+The watcher detects them. LiteParse parses the PDF (with bounding boxes for every word). ExcelJS converts the spreadsheet tables to markdown. OfficeParser extracts slide text. All three land in `wiki/sources/` as markdown. The indexer reads all three, writes `index.md`.
+
+You ask: **"What changed in Q4 revenue guidance?"**
+
+Agent reads `index.md` (3 rows). Selects `q3-results.md` (mentions "guidance") and `board-deck.md` (mentions "strategy shift"). Reads both. Answers: "Q3 report states flat Q4 guidance, but the board deck proposes a strategy shift to enterprise that management expects to impact Q4 positively." Cites both files.
+
+You ask with `/research`: **"Compare pipeline coverage to the revenue target."**
+
+Agent reads `index.md`, reads `pipeline.md` and `q3-results.md`, writes an analysis, saves it to `wiki/outputs/coverage-analysis.md`. The watcher detects the new file. Index updates with a new row. Next time anyone asks about pipeline coverage, the analysis is already there.
+
+---
+
+## How Eval Actually Works
+
+Let me be specific about what the eval loop does and doesn't do.
+
+**What gets traced (every query):**
+
+```json
+{
+  "query": "What changed in Q4 revenue guidance?",
+  "filesRead": ["index.md", "q3-results.md", "board-deck.md"],
+  "filesAvailable": ["q3-results.md", "pipeline.md", "board-deck.md"],
+  "answer": "Q3 report states flat guidance...",
+  "citations": [
+    { "file": "q3-results.md", "claim": "flat Q4 guidance" },
+    { "file": "board-deck.md", "claim": "strategy shift to enterprise" }
+  ],
+  "model": "claude-sonnet-4",
+  "tokensUsed": 3800,
+  "durationMs": 4200
+}
+```
+
+**What the eval agent checks:**
+- **Citation validity** — does the cited file actually contain the claimed text? (LLM reads the source, confirms or denies)
+- **Answer-source consistency** — does the answer contradict anything in the cited sources?
+- **Missing sources** — were any files in `filesAvailable` relevant to the query but not in `filesRead`? (Checks by topic overlap)
+
+**What it does NOT do:**
+- It does not automatically update prompts or rewrite wiki pages. It writes a report. A human reads the report and decides what to change.
+- It cannot catch every omission. If a relevant fact exists in a file the agent didn't read, and the topic keywords don't overlap with the query, the eval won't flag it.
+- It uses an LLM judge. The judge can be wrong. We're not claiming closed-loop self-improvement — we're claiming structured post-hoc analysis that surfaces issues a human would otherwise miss.
+
+**The eval report goes to `wiki/outputs/eval-report.md`.** The watcher detects it, index updates. The Q&A agent can read it on future queries. This doesn't make the system "self-improving" in any automated sense — it makes the eval findings *available* to the agent as context, alongside all other wiki content.
+
+---
+
+## The "Agents" Are Just Sessions
+
+No orchestration framework. No message passing. Each capability is a session with different tools and a different prompt:
+
+| Capability | Tools | What it does |
+|---|---|---|
+| **Index** | Coding (writes index.md) | Reads all sources, writes summary table |
+| **Query** | Read-only | Reads index → selects sources → answers |
+| **Research** | Coding (writes outputs/) | Answers AND saves to wiki |
+| **Eval** | Read-only (reads traces/) | Checks citations, flags issues, writes report |
+
+Lint is a prompt template on the query session. Not a separate agent.
+
+We use Pi SDK for the session runtime — `createAgentSession()` with tool-scoped permissions. The architecture isn't Pi-specific. Any agent framework that supports tool-scoped sessions (restrict which files/commands the agent can access) would work. Pi SDK is what we use because we already run it in production for [other projects](https://github.com/satish860/HerculesV2).
+
+---
+
+## What Can Go Wrong
+
+**Index staleness.** If the indexer fails silently, the Q&A agent works off an old index and doesn't know about new sources. Fix: the watcher logs every indexing run. `/status` reports when the index was last updated.
+
+**Contradiction drift.** Two sources say different things about the same fact. The agent picks one — usually whichever it reads last. Lint catches this ("sources X and Y disagree on Z") but only if you run it. We don't have automatic conflict resolution. That's a hard problem we're not pretending to solve.
+
+**Output pollution.** Saved research outputs live alongside raw sources in the wiki. If a research output contains a mistake, future queries may cite it as fact. Fix: outputs are in a separate folder (`outputs/` not `sources/`). The index marks them by type. The agent can distinguish "this is a primary source" from "this is a previous analysis."
+
+**Context window pressure.** A 200-article wiki with a 50-row index works. A 500-article wiki with a 200-row index degrades — too many tokens reading the index, too little room for source content. At that point, split the index by topic or add retrieval.
+
+---
+
+## Run It
+
+**Local (no Docker):**
+
+```bash
+npx llm-kb run ./my-documents
+```
+
+That's it. Point it at a folder. It starts the watcher, parses existing files, builds the index, and opens a browser at `http://localhost:3000` with the chat UI. Drop more files into the folder while it's running — they get ingested automatically.
+
+**Docker (for deployment):**
+
+```bash
+docker run -v /your/docs:/data -e LLM_API_KEY=sk-... llm-kb
+```
+
+Same system, containerized. Volume mount for storage. Same command on Digital Ocean, Azure, AWS — the container reads and writes to `/data`, the host decides what `/data` is.
+
+---
+
+## The Series
+
+Each post ships working code.
+
+| Part | What We Build |
+|---|---|
+| **1** | Architecture and tradeoffs (this post) |
+| **2** | Ingest — file watcher + multi-format parsing + auto-indexing |
+| **3** | Q&A — tool-scoped sessions + API |
+| **4** | UI — Next.js chat, upload, wiki browser |
+| **5** | Eval — traces, checks, reports (with real numbers) |
+| **6** | Docker — one container, any platform |
+| **7** | Citations — bounding boxes from [PDF parsing](/articles/parsing-pdfs-with-bounding-boxes) → highlight source text |
+
+---
+
+## Next
+
+Part 2: the ingest pipeline. Drop any file into a folder. Get markdown + index out. The code behind `npx llm-kb run`. [GitHub →](https://github.com/satish860/llm-kb)
+
+---
+
+*[Pi SDK](https://github.com/badlogic/pi-mono) · [LiteParse](https://github.com/run-llama/liteparse) · [Karpathy's post](https://x.com/karpathy/status/2039805659525644595)*
