@@ -15,6 +15,10 @@ Andrej Karpathy [posted](https://x.com/karpathy/status/2039805659525644595) abou
 
 Dump documents into a folder. An LLM compiles them into a wiki. Ask questions. He called it "a hacky collection of scripts" and said there's room for "an incredible new product."
 
+Then he published [the full pattern as a gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — architecture, operations, indexing. The key line:
+
+> *"This works surprisingly well at moderate scale (~100 sources, ~hundreds of pages) and avoids the need for embedding-based RAG infrastructure."*
+
 [@jumperz](https://x.com/jumperz/status/2039826228224430323) drew the best summary:
 
 ![Architecture diagram of Karpathy's LLM Knowledge Base showing the flow from sources to raw files to wiki to Q&A to output](/images/Modules.jpg)
