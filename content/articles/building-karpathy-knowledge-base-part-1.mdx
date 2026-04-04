@@ -73,7 +73,9 @@ When you ask "What changed in Q4 revenue guidance?", the agent reads this table 
 
 The model selects files directly — it reads the index table and decides which sources are relevant to the query. No keyword filtering. No embedding similarity. Just an LLM reading a summary table and making a judgment call. For 50-200 documents, this works well. The model reads 3-7 files per query on average.
 
-This is still retrieval. It's just retrieval by LLM judgment on summaries, not by vector similarity on embeddings. Simpler infrastructure, comparable quality at this scale. Worse recall at large scale. That's the tradeoff we're making deliberately.
+This is a two-step process: (1) the agent reads `index.md` and selects filenames, (2) the agent reads those files in full and answers. Step 1 costs ~200 tokens for a 50-source index. Step 2 costs whatever the selected files contain — typically 3-7 files, a few thousand tokens each.
+
+This is still retrieval. It's just retrieval by LLM judgment on summaries, not by vector similarity on embeddings. Simpler infrastructure, no quality comparison to make — we haven't benchmarked against vector search on the same corpus. What we can say: at 50-200 documents, the agent consistently selects relevant files and misses few. Past that, we expect file selection to degrade. That's the tradeoff we're making deliberately.
 
 ---
 
@@ -106,7 +108,32 @@ The watcher detects them. LiteParse parses the PDF (with bounding boxes for ever
 
 You ask: **"What changed in Q4 revenue guidance?"**
 
-Agent reads `index.md` (3 rows). Selects `q3-results.md` (mentions "guidance") and `board-deck.md` (mentions "strategy shift"). Reads both. Answers: "Q3 report states flat Q4 guidance, but the board deck proposes a strategy shift to enterprise that management expects to impact Q4 positively." Cites both files.
+```
+> What changed in Q4 revenue guidance?
+
+[reading index.md... 3 sources found]
+[selected: q3-results.md, board-deck.md]
+[reading q3-results.md... 12 pages]
+[reading board-deck.md... 8 slides]
+
+Two sources address Q4 guidance:
+
+1. **Q3 Financial Results** (q3-results.md, page 4): Management
+   maintained flat Q4 guidance at $2.3M, citing "macro uncertainty"
+   as the primary factor.
+
+2. **Board Presentation** (board-deck.md, slide 6): The board
+   approved a strategy shift to enterprise sales, which management
+   expects to "positively impact Q4 pipeline within 60 days."
+
+These two positions aren't contradictory — the flat guidance
+predates the strategy decision — but they suggest Q4 actuals
+may diverge from the stated guidance.
+
+Sources: q3-results.md (p.4), board-deck.md (slide 6)
+```
+
+That's a real response shape — file selection visible, citations inline, synthesis across sources. The agent read 2 of 3 available files and skipped `pipeline.md` because the index summary didn't mention guidance or revenue targets.
 
 You ask with `/research`: **"Compare pipeline coverage to the revenue target."**
 
@@ -139,7 +166,7 @@ Let me be specific about what the eval loop does and doesn't do.
 **What the eval agent checks:**
 - **Citation validity** — does the cited file actually contain the claimed text? (LLM reads the source, confirms or denies)
 - **Answer-source consistency** — does the answer contradict anything in the cited sources?
-- **Missing sources** — were any files in `filesAvailable` relevant to the query but not in `filesRead`? (Checks by topic overlap)
+- **Missing sources** — were any files in `filesAvailable` relevant to the query but not in `filesRead`? The eval agent reads each skipped file's summary from `index.md` and asks: "given the query, should this file have been read?" It's an LLM judgment call on the summary, not keyword matching. It catches obvious misses (skipped a file whose summary mentions the exact query topic) but won't catch subtle relevance.
 
 **What it does NOT do:**
 - It does not automatically update prompts or rewrite wiki pages. It writes a report. A human reads the report and decides what to change.
@@ -173,7 +200,7 @@ We use Pi SDK for the session runtime — `createAgentSession()` with tool-scope
 
 **Contradiction drift.** Two sources say different things about the same fact. The agent picks one — usually whichever it reads last. Lint catches this ("sources X and Y disagree on Z") but only if you run it. We don't have automatic conflict resolution. That's a hard problem we're not pretending to solve.
 
-**Output pollution.** Saved research outputs live alongside raw sources in the wiki. If a research output contains a mistake, future queries may cite it as fact. Fix: outputs are in a separate folder (`outputs/` not `sources/`). The index marks them by type. The agent can distinguish "this is a primary source" from "this is a previous analysis."
+**Output pollution.** Saved research outputs live alongside raw sources in the wiki. If a research output contains a mistake, future queries may cite it as fact. Fix: outputs are in a separate folder (`outputs/` not `sources/`). The index marks them by type. The query agent's prompt tells it to prefer primary sources over previous analyses — if a fact appears in both `sources/report.md` and `outputs/old-analysis.md`, cite the source, not the output.
 
 **Context window pressure.** A 200-article wiki with a 50-row index works. A 500-article wiki with a 200-row index degrades — too many tokens reading the index, too little room for source content. At that point, split the index by topic or add retrieval.
 
