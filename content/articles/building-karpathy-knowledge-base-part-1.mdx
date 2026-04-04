@@ -25,8 +25,6 @@ Ever since I wrote [Why I Stopped Using RAG](/articles/why-i-stopped-using-rag-f
 
 So instead of answering one more time, I'm building it in public. Working code. A series where each post ships something you can run. If it works at your scale, use it. If it doesn't, you'll know exactly where to add embeddings back.
 
-This post is the architecture and the first working piece: `npx llm-kb run`.
-
 ---
 
 ## The standard approach has too many decisions
@@ -80,101 +78,33 @@ That's what the LLM does. And at this scale, its judgment is better than cosine 
 
 The right infrastructure is the least infrastructure that solves the problem. If I outgrow this, I add retrieval. The agent already reads files through tools — swapping "read file" for "search index" changes one component, not the architecture.
 
----
+## The architecture
 
-## Pi SDK sessions as the RAG system
+Three zones. [Part 2](/articles/building-karpathy-knowledge-base-part-2) shows how Pi SDK sessions make this work with almost no code:
 
-Here's the architectural insight that made everything simple: **a Pi SDK session that can read files IS a retrieval system.** You don't need LangChain. You don't need a retrieval pipeline. You need an agent with tool permissions.
-
-The whole system is just sessions with different tool access:
-
-| Session | Tools | Job |
-|---------|-------|-----|
-| **Indexer** | read + write + bash | Reads sources, writes index.md |
-| **Query** | read-only | Reads index → picks files → answers |
-| **Research** | read + write | Answers AND saves to wiki |
-| **Eval** | read-only | Checks citations against sources |
-
-No orchestration framework. No message passing. Each session is a `createAgentSession()` call with different tools. The tools define what the session can do. That's the security boundary AND the architecture.
-
-Same LLM, different permissions, completely different behaviors. This is RAG without the R being a separate system. The retrieval IS the agent reading files. The generation IS the agent answering. One session does both.
-
-The indexer is the most interesting session. It's what makes the no-embeddings approach work:
-
-```typescript
-import {
-  createAgentSession, createReadTool,
-  createWriteTool, createBashTool,
-  DefaultResourceLoader,
-  SessionManager, SettingsManager,
-} from "@mariozechner/pi-coding-agent";
-
-const loader = new DefaultResourceLoader({
-  cwd: folder,
-  agentsFilesOverride: (current) => ({
-    agentsFiles: [
-      ...current.agentsFiles,
-      { path: ".llm-kb/AGENTS.md", content: agentsContent },
-    ],
-  }),
-});
-
-const { session } = await createAgentSession({
-  cwd: folder,
-  resourceLoader: loader,
-  tools: [
-    createReadTool(folder),
-    createBashTool(folder),
-    createWriteTool(folder),
-  ],
-  sessionManager: SessionManager.inMemory(),
-  settingsManager: SettingsManager.inMemory({
-    compaction: { enabled: false },
-  }),
-});
-
-await session.prompt(
-  `Read each file in .llm-kb/wiki/sources/
-   and write index.md with a summary table.`
-);
-session.dispose();
+```
+┌──────────────────────────────────────┐
+│                                      │
+│  FILE WATCHER  (built ✓)             │
+│  Parse PDFs → Build index.md         │
+│  Watch for new files → re-index      │
+│                                      │
+│  AGENT SESSIONS  (Part 3-4)          │
+│  Query: read-only → answer           │
+│  Research: read+write → save to wiki │
+│                                      │
+│  EVAL LOOP  (Part 5)                 │
+│  Trace queries → check citations     │
+│  Flag inconsistencies                │
+│                                      │
+└──────────────────────────────────────┘
 ```
 
-The key pattern is `agentsFilesOverride`. We inject a dynamically generated `AGENTS.md` that tells the agent what sources exist, what libraries are available, and what format the index should be. The user's folder stays clean — no config files, no framework scaffolding.
-
-The same pattern works for query, research, and eval. Different `AGENTS.md` content, different tools, same `createAgentSession()` call. The whole RAG system is variations of one function.
-
----
-
-## The ingest pipeline
-
-Four things happen when you run `npx llm-kb run`:
-
-**Scan** — walk the folder recursively, skip `.llm-kb/`, collect supported files.
-
-**Parse PDFs** — every PDF produces two files. Markdown for the LLM to read. JSON with [bounding boxes](/articles/parsing-pdfs-with-bounding-boxes) for citation verification. [LiteParse](https://github.com/run-llama/liteparse) runs locally, no cloud calls. Mtime check means re-runs are instant — only new or changed files get re-parsed.
-
-**Index** — the Pi SDK indexer session reads sources and writes `index.md`.
-
-**Watch** — chokidar watches the folder. New PDF → parse → re-index. Two-second debounce so dropping five files triggers one batch, not five cycles.
-
-Only PDFs get pre-parsed. I started with adapters for Excel, Word, and PowerPoint — three more dependencies, three more edge cases. Then I realized the agent already has tools. Pi SDK sessions can run bash, read files, write scripts. When someone asks about a spreadsheet, the agent uses ExcelJS (bundled with llm-kb) and reads it live. PDFs are different — they need bounding boxes extracted ahead of time and OCR for scanned pages. Everything else the agent handles on demand.
-
----
-
-## How do you know it's right?
-
-This is the question nobody in the Karpathy thread is asking.
-
-An LLM compiles 100 articles into summaries. Did it get the facts right? Did it miss a key detail in source 47?
-
-That's why the eval loop exists. Every query gets traced — what files were read, what was answered, what was cited. The eval agent checks citations against source files and flags inconsistencies. It's an LLM judge — it can be wrong — but structured post-hoc analysis catches things you'd miss by eyeballing answers.
-
-I wrote about [why bounding boxes matter for verification](/articles/parsing-pdfs-with-bounding-boxes) — per-word coordinates let you confirm that a cited page actually says what the LLM claims.
-
----
+The eval loop matters because of a question nobody in the Karpathy thread is asking: **how do you know the wiki is right?** An LLM compiles 100 articles into summaries — did it get the facts right? Every query gets traced. The eval agent checks citations against source files. I wrote about [why bounding boxes matter for verification](/articles/parsing-pdfs-with-bounding-boxes) — per-word coordinates let you confirm that a cited page actually says what the LLM claims.
 
 ## Try it
+
+The ingest pipeline is working today:
 
 ```bash
 npx llm-kb run ./my-documents
@@ -195,24 +125,19 @@ Scanning ./my-documents...
 
 PDFs become markdown + bounding boxes. The index builds. The watcher starts. Drop a PDF in while it's running — parsed and indexed automatically. Original files never touched.
 
-Auth goes through [Pi SDK](https://github.com/mariozechner/pi) — install it, authenticate once, llm-kb uses the same credentials.
-
----
-
 ## The series
 
-This is post 1 of a series. Each post ships working code you can run:
+Each post ships working code:
 
 | Part | What |
 |---|---|
-| **1** | Architecture — no embeddings + Pi SDK sessions (this post) |
-| **2** | Q&A — tool-scoped query sessions |
-| **3** | Web UI — chat, upload, wiki browser |
-| **4** | Eval — traces, checks, reports |
-| **5** | Docker — one container, any platform |
-| **6** | Citations — [bounding boxes](/articles/parsing-pdfs-with-bounding-boxes) → highlight source text |
-
-If the no-embeddings approach works at your scale, use it. If it doesn't, you'll know exactly which component to swap — the architecture is designed so adding vector search later changes one piece, not everything.
+| **1** | No embeddings — why it works (this post) |
+| **2** | [Pi SDK sessions as RAG](/articles/building-karpathy-knowledge-base-part-2) |
+| **3** | Q&A — tool-scoped query sessions |
+| **4** | Web UI |
+| **5** | Eval — traces, checks, reports |
+| **6** | Docker |
+| **7** | Citations — [bounding boxes](/articles/parsing-pdfs-with-bounding-boxes) → highlight source text |
 
 [GitHub →](https://github.com/satish860/llm-kb)
 
