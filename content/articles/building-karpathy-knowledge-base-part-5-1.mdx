@@ -1,0 +1,377 @@
+---
+title: "Building Karpathy's Knowledge Base — Part 5.1: Building the Eval Loop"
+date: 2026-04-07
+excerpt: "The code behind the eval system. Parse session JSONL files into Q&A exchanges, run Haiku as a judge on each one, calculate metrics, and write learned rules back into the system. One file, no framework."
+template: "technical"
+category: "AI Engineering"
+tags: ["RAG", "knowledge-base", "LLM", "eval", "document-ai", "typescript", "tutorial"]
+---
+
+[Part 5](/articles/building-karpathy-knowledge-base-part-5) showed what the eval loop produces — reports, guidelines, wiki hit rates. This post shows how to build it.
+
+Four steps:
+
+1. **Parse sessions** — read JSONL files, extract Q&A exchanges with the actual file content the agent saw
+2. **Calculate metrics** — wiki hits, wasted reads, most-read files
+3. **Run the judge** — Haiku checks each Q&A for citation errors, contradictions, wiki gaps
+4. **Write outputs** — eval report for humans, guidelines for the agent
+
+All in one file. No agent session — just direct LLM calls and file I/O.
+
+---
+
+## Step 1: Parse sessions into Q&A exchanges
+
+The trace builder from [Part 4.1](/articles/building-karpathy-knowledge-base-part-4-1) gives us basic traces. Eval needs more — it needs the **actual file content** the agent read, not just the filenames. That's how the judge can verify citations.
+
+```typescript
+interface SessionQA {
+  sessionFile: string;
+  question: string;
+  thinking: string;
+  filesRead: {
+    path: string;
+    content: string;  // first 2000 chars
+  }[];
+  filesAvailable: string[];
+  filesSkipped: string[];
+  answer: string;
+  model: string;
+  durationMs: number;
+}
+```
+
+Parsing works by walking through the session JSONL messages in order:
+
+```typescript
+for (const entry of messages) {
+  const msg = entry.message;
+
+  if (msg.role === "user") {
+    // New question — save previous Q&A if exists
+    if (currentQuestion && currentAnswer) {
+      qas.push({ /* previous exchange */ });
+    }
+    currentQuestion = extractText(msg.content);
+    currentFilesRead = [];
+    currentAnswer = "";
+  }
+
+  if (msg.role === "assistant") {
+    // Collect thinking and answer text
+    for (const block of msg.content ?? []) {
+      if (block.type === "thinking")
+        currentThinking += block.thinking;
+      if (block.type === "text")
+        currentAnswer += block.text;
+    }
+  }
+
+  if (msg.role === "toolResult" && !msg.isError) {
+    // Match tool result back to its tool call
+    // to get the file path + capture the content
+    const toolCallId = msg.toolCallId;
+    // ... find matching read tool call ...
+    currentFilesRead.push({
+      path,
+      content: content.slice(0, 2000),
+    });
+  }
+}
+```
+
+The tool result matching is the tricky part. When the agent reads a file, the conversation looks like:
+
+```
+assistant: toolCall(name="read", path="evidence-act.md")
+toolResult: (id=same, content="Section 65B...")
+```
+
+We match the `toolCallId` back to the assistant's tool call to get the path, then capture the content from the result. Capping at 2,000 characters keeps memory reasonable — enough for the judge to verify citations.
+
+---
+
+## Step 2: Calculate metrics
+
+Metrics tell you how the system is performing without LLM calls:
+
+```typescript
+function calculateMetrics(qas: SessionQA[]): EvalMetrics {
+  let wikiHits = 0;
+  let wastedReads = 0;
+  const uniqueFiles = new Map<string, number>();
+
+  for (const qa of qas) {
+    // Files read, excluding index.md and wiki.md
+    const sourceFilesRead = qa.filesRead.filter(
+      (f) =>
+        !f.path.includes("index.md") &&
+        !f.path.includes("wiki.md")
+    );
+
+    // Wiki hit = answered without reading source files
+    if (sourceFilesRead.length === 0) {
+      wikiHits++;
+    }
+
+    for (const f of sourceFilesRead) {
+      const name = basename(f.path);
+      uniqueFiles.set(
+        name,
+        (uniqueFiles.get(name) ?? 0) + 1
+      );
+
+      // Wasted read = file read but not cited in answer
+      if (
+        !qa.answer.includes(name) &&
+        !qa.answer.includes(name.replace(".md", ""))
+      ) {
+        wastedReads++;
+      }
+    }
+  }
+
+  return { wikiHits, wastedReads, uniqueFiles, ... };
+}
+```
+
+**Wiki hit rate** — the percentage of queries where the agent answered without reading any source files. It found everything it needed in `wiki.md`. This climbs as the wiki grows.
+
+**Wasted reads** — files the agent opened but never cited. It read the file, spent tokens on it, then didn't use it. This tells you the agent is being too aggressive with file selection.
+
+**Most-read files** — if `indian-penal-code.md` was read 8 times, that knowledge should be in the wiki by now. This feeds directly into the guidelines.
+
+---
+
+## Step 3: Run the judge
+
+For each Q&A exchange, Haiku gets the question, the answer, and the **actual file content** the agent saw:
+
+```typescript
+async function judgeQA(
+  qa: SessionQA,
+  apiKey: string,
+  modelId: string
+): Promise<EvalIssue[]> {
+  const model = getModels("anthropic")
+    .find((m) => m.id === modelId);
+
+  const filesSummary = qa.filesRead
+    .map(
+      (f) =>
+        `File: ${basename(f.path)}\n` +
+        `Content (first 2000 chars):\n${f.content}`
+    )
+    .join("\n\n---\n\n");
+
+  const prompt = `You are an eval judge for a
+knowledge base Q&A system.
+
+QUESTION: ${qa.question}
+
+ANSWER:
+${qa.answer.slice(0, 3000)}
+
+FILES READ BY AGENT:
+${filesSummary || "None — answered from wiki cache"}
+
+FILES AVAILABLE BUT SKIPPED:
+${qa.filesSkipped.join(", ") || "none"}
+
+---
+
+Check for these issues. Return a JSON array:
+1. CITATION: Does the file content support the claims?
+2. CONTRADICTION: Does the answer contradict the files?
+3. WIKI-GAP: What topic should be in the wiki so
+   next time the agent doesn't need file reads?
+4. WASTED-READ: Were files read but not used?
+
+Return ONLY a JSON array. If no issues: []`;
+
+  const result = await completeSimple(model, {
+    systemPrompt:
+      "Precise QA evaluator. Return only valid JSON.",
+    messages: [{
+      role: "user",
+      content: prompt,
+      timestamp: Date.now(),
+    }],
+  }, { apiKey });
+
+  // Parse JSON response
+  const text = result.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (jsonMatch) {
+    return JSON.parse(jsonMatch[0]);
+  }
+  return [];
+}
+```
+
+The judge sees the source text, not just the answer. When it flags "Agent says Clause 303 but source says Clause 304" — it's comparing specific text, not guessing.
+
+Each finding has a type, severity, and recommendation:
+
+```json
+{
+  "type": "wiki-gap",
+  "severity": "warning",
+  "detail": "Electronic evidence certificate
+             requirements not in wiki",
+  "recommendation": "Add electronic evidence section"
+}
+```
+
+---
+
+## Step 4: Write the guidelines
+
+The eval report is for you to read. The guidelines are for the agent. They need different formats.
+
+The guidelines builder turns eval findings into actionable rules:
+
+```typescript
+function buildAgentsInsights(
+  result: EvalResult
+): string {
+  const lines: string[] = [];
+
+  lines.push(`## Eval Insights (auto-generated)`);
+
+  // Wiki gaps — tell agent what to cache
+  if (result.wikiGaps.length > 0) {
+    lines.push(
+      `### Wiki Gaps — add to wiki when ` +
+      `users ask about these topics`
+    );
+    for (const gap of result.wikiGaps.slice(0, 15)) {
+      lines.push(`- ${gap}`);
+    }
+  }
+
+  // Behaviour fixes from errors
+  const contradictions = result.issues
+    .filter((i) => i.type === "contradiction");
+  if (contradictions.length > 0) {
+    lines.push(`### Behaviour Fixes`);
+    lines.push(
+      `- Double-check claims against source text.`
+    );
+  }
+
+  if (result.metrics.wastedReads > 10) {
+    lines.push(
+      `- Be more selective with file reads. ` +
+      `Last eval: ${result.metrics.wastedReads} ` +
+      `wasted reads.`
+    );
+  }
+
+  // Heavily-read files — agent should use wiki instead
+  const heavy = [...result.metrics.uniqueFilesRead]
+    .sort((a, b) => b[1] - a[1])
+    .filter(([, count]) => count >= 3);
+
+  if (heavy.length > 0) {
+    lines.push(
+      `### Heavily-Read Files — prefer wiki`
+    );
+    for (const [file, count] of heavy.slice(0, 5)) {
+      lines.push(`- ${file} (read ${count} times)`);
+    }
+  }
+
+  // Performance snapshot
+  const hitRate = Math.round(
+    result.metrics.wikiHits /
+    result.metrics.totalQAs * 100
+  );
+  lines.push(`### Performance`);
+  lines.push(`- Wiki hit rate: ${hitRate}% (target: 80%+)`);
+
+  return lines.join("\n");
+}
+```
+
+The guidelines file gets saved to `.llm-kb/guidelines.md`. The query agent reads this file on-demand via a tool call — it's not injected into every system prompt. Progressive disclosure: lean system prompt, detailed guidelines available when the agent needs them.
+
+---
+
+## Wiring it into the CLI
+
+The `llm-kb eval` command brings all four steps together:
+
+```typescript
+program
+  .command("eval")
+  .description("Analyze query quality and update guidelines")
+  .option("--last <n>", "Only check last N sessions")
+  .option("--folder <path>", "Path to document folder")
+  .action(async (options) => {
+    const root = resolveKnowledgeBase(
+      options.folder || process.cwd()
+    );
+    const auth = checkAuth();
+
+    const result = await runEval(root, {
+      authStorage: auth.authStorage,
+      last: options.last ? parseInt(options.last) : undefined,
+      onProgress: (msg) => console.log(`  ${msg}`),
+    });
+
+    // Print summary
+    console.log(`\n  Results:`);
+    console.log(`  Queries analyzed:  ${result.metrics.totalQAs}`);
+    console.log(`  Wiki hit rate:     ${hitRate}%`);
+    console.log(`  Wasted reads:      ${result.metrics.wastedReads}`);
+    console.log(`  Wiki gaps:         ${result.wikiGaps.length}`);
+    console.log(`\n  Report: .llm-kb/wiki/outputs/eval-report.md`);
+  });
+```
+
+---
+
+## The cost
+
+Everything runs on Haiku. At ~$0.25 per million input tokens:
+
+| What | Tokens | Cost |
+|------|--------|------|
+| Wiki update (per query) | ~2,000 | ~$0.0005 |
+| Eval judge (per Q&A) | ~4,000 | ~$0.001 |
+| Full eval (29 Q&A) | ~116,000 | ~$0.03 |
+
+Three cents to evaluate 29 queries. The wiki updates cost half a cent per query. At this price, the question isn't "can we afford eval" — it's "why wouldn't you."
+
+---
+
+## One file
+
+The entire eval system is one file — `eval.ts` — about 250 lines. No LangChain, no eval framework, no database. Parse JSONL, call Haiku, write markdown.
+
+The wiki updater is another 70 lines. The session watcher is 50.
+
+All the learning — wiki knowledge, agent behaviour, eval metrics — lives in three markdown files the agent reads on demand:
+
+```
+.llm-kb/
+  wiki/wiki.md          ← knowledge (updated every query)
+  guidelines.md         ← behaviour (updated by eval)
+  wiki/outputs/
+    eval-report.md      ← metrics (updated by eval)
+```
+
+Markdown in, markdown out. The agent reads files. The eval reads files. Everything is inspectable. Nothing is a black box.
+
+[Full source on GitHub →](https://github.com/satish860/llm-kb/tree/master/src)
+
+---
+
+**Related:** [Part 5: Eval Loop](/articles/building-karpathy-knowledge-base-part-5) · [Part 4.1: Building the Wiki Updater](/articles/building-karpathy-knowledge-base-part-4-1) · [Part 2: Pi SDK Sessions](/articles/building-karpathy-knowledge-base-part-2)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [Pi AI library](https://github.com/nichochar/pi-ai)*

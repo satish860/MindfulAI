@@ -1,0 +1,220 @@
+---
+title: "Building Karpathy's Knowledge Base — Part 4: A Wiki That Organizes by Concept"
+date: 2026-04-07
+excerpt: "The wiki was organizing knowledge by filename. That's the wrong structure for an agent. One prompt change — organize by concept, not source — turned flat file summaries into a navigable knowledge graph. 66% of queries now answered without reading source files."
+template: "technical"
+category: "AI Engineering"
+tags: ["RAG", "knowledge-base", "LLM", "pi-sdk", "document-ai", "karpathy", "wiki", "farzapedia"]
+---
+
+[Part 3](/articles/building-karpathy-knowledge-base-part-3) built the compounding loop — every query saves knowledge back to the wiki. It worked. But the wiki it produced looked like this:
+
+```markdown
+## indian-penal-code.md
+Contains 511 sections covering criminal offenses including
+murder (S.302), theft (S.378), sedition (S.124A)...
+
+## indian-evidence-act.md
+Contains rules of evidence admissibility including
+documentary evidence, electronic records (S.65B)...
+
+## bankers-books-evidence-act.md
+Special provisions for banking records as evidence...
+```
+
+Each section is named after a file. The knowledge is there, but it's organized the way a filesystem would — alphabetical, one section per source.
+
+Then [Farza built Farzapedia](https://x.com/FarzaTV/status/2040563939797504467). He fed 2,500 diary entries, Apple Notes, and iMessage conversations into an LLM and got back 400 concept articles — organized by topic, not by source. Karpathy [called it the best implementation](https://x.com/karpathy/status/2040572272944324650) of his pattern.
+
+One line from Farza changed how I thought about the wiki:
+
+> *"This wiki was not built for me. I built it for my agent."*
+
+---
+
+## The difference one prompt change makes
+
+The wiki updater is a Haiku call that runs after each query. The old prompt said:
+
+```
+Use ## for each source document
+```
+
+The new prompt says:
+
+```
+Use ## for CONCEPTS and TOPICS — NOT source file names
+  Good: "## Electronic Evidence", "## Mob Lynching"
+  Bad:  "## indian-penal-code.md"
+```
+
+Same Haiku call. Same wiki updater code. One rule changed. The wiki it produces:
+
+```markdown
+## Mob Lynching
+
+First-ever criminalisation in Indian law under BNS 2023,
+Clause 101(2). Group of 5+ persons acting on grounds of
+race, caste, community, sex, language, or personal belief.
+Punishment: minimum 7 years to life imprisonment, or death.
+
+IPC had no equivalent provision — mob lynching cases were
+prosecuted under general murder (S.302) or rioting (S.147).
+
+See also: [[Murder and Homicide]], [[BNS 2023 Overview]]
+*Sources: indian penal code - new.md (p.137),
+          Annotated comparison (p.15) · 2026-04-06*
+
+---
+
+## Electronic Evidence
+
+Section 65B of the Indian Evidence Act requires a certificate
+from a person in responsible position for electronic records
+to be admissible. BSA 2023 expands scope significantly:
+emails, WhatsApp messages, GPS data, cloud documents all
+explicitly covered as admissible electronic evidence.
+
+See also: [[Evidence Law Overview]]
+*Sources: Indian Evidence Act.md, Comparison Chart.md
+          · 2026-04-06*
+```
+
+Notice what happened. "Mob Lynching" pulls from two different source files — the IPC and the annotated comparison. "Electronic Evidence" pulls from the Evidence Act and a comparison chart. The wiki **synthesized across sources** and organized by what the knowledge is about, not where it came from.
+
+---
+
+## How the agent navigates this
+
+When you ask "how has mob lynching law changed?", here's what happens:
+
+```
+┌─────────────────────────────────────────────┐
+│ Agent reads wiki.md                          │
+│                                              │
+│   Scans ## headings:                         │
+│     ## Mob Lynching  ← match                 │
+│     ## Electronic Evidence                   │
+│     ## Murder and Homicide                   │
+│     ## BNS 2023 Overview                     │
+│                                              │
+│   Reads the Mob Lynching section             │
+│   → finds the answer in 4 bullet points      │
+│   → cites original sources at the bottom     │
+│   → answers in ~3 seconds, 0 file reads      │
+│                                              │
+└─────────────────────────────────────────────┘
+```
+
+With the old wiki (organized by filename), the agent had to guess which source file might contain mob lynching information. It would read `index.md`, pick `indian-penal-code.md`, read the full 200-page document, find the relevant section, then check the comparison document for changes. Two file reads, 25 seconds.
+
+With the concept wiki, the answer is already synthesized under `## Mob Lynching`. One section read, 3 seconds.
+
+---
+
+## The numbers after 29 queries
+
+I ran this on a set of Indian legal documents — the IPC, BNS 2023, Evidence Acts, comparison charts. Nine PDFs, ~1,000 pages total. After 29 queries:
+
+```
+llm-kb eval
+
+  Queries analyzed:  29
+  Wiki hit rate:     66%
+  Wasted reads:      42
+```
+
+66% of queries answered from the wiki — no file reads needed. The first time you ask about a topic, the agent reads source files and the wiki updater creates a concept entry. The second time, the wiki has it.
+
+| Query | First time | Second time |
+|-------|-----------|-------------|
+| "what is mob lynching under BNS?" | 24s, reads 2 files | 3s, wiki hit |
+| "electronic evidence rules?" | 18s, reads 2 files | 2s, wiki hit |
+| "compare old and new evidence acts" | 31s, reads 3 files | 4s, wiki hit |
+
+The wiki hit rate starts at 0% and climbs with every query. At 66% after 29 queries, two-thirds of questions cost nothing — instant answers from accumulated knowledge.
+
+---
+
+## How the wiki updater works
+
+After each query completes, the session watcher picks up the finished session file and triggers a Haiku call. Not an agent session — a direct `completeSimple()` call. No tools, no file access. Just:
+
+1. Read current `wiki.md`
+2. Read the new question + answer + source citations
+3. Return updated `wiki.md` with the new knowledge integrated
+
+```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Session      │    │  Session     │    │  Haiku       │
+│  completes    │───▶│  watcher     │───▶│  wiki update │
+│               │    │  detects it  │    │  (direct)    │
+└──────────────┘    └──────────────┘    └──────┬───────┘
+                                               │
+                                               ▼
+                                        ┌──────────────┐
+                                        │  wiki.md     │
+                                        │  updated     │
+                                        └──────────────┘
+```
+
+Haiku decides where to file the knowledge. A question about Section 65B goes under `## Electronic Evidence`. A question about burden of proof might update `## Evidence Law Overview` and create a new `## Burden of Proof` section. Haiku reads the existing wiki structure and makes a judgment call — same as a librarian shelving a new book.
+
+The human never touches the wiki directly. It maintains itself.
+
+---
+
+## Three layers, three lifecycles
+
+v0.4.0 separates concerns into three files the agent reads at different times:
+
+```
+┌──────────────────────────────────────────┐
+│  AGENTS.md (built at runtime by code)    │
+│  → How to answer: tools, source list     │
+│  → Stable, changes only on code deploy   │
+└──────────────────────────────────────────┘
+          │
+          │ agent reads on-demand:
+          │
+    ┌─────┴──────┐       ┌────────────────┐
+    │  wiki.md   │       │ guidelines.md  │
+    │  WHAT      │       │ HOW            │
+    │            │       │                │
+    │  Knowledge │       │ Learned rules  │
+    │  by concept│       │ from eval      │
+    │            │       │ + your rules   │
+    │  Updated   │       │ Updated after  │
+    │  every     │       │ llm-kb eval    │
+    │  query     │       │                │
+    └────────────┘       └────────────────┘
+```
+
+`AGENTS.md` is lean — just the source list and tool instructions. The agent reads `wiki.md` first for cached knowledge. If the answer isn't there, it reads source files. `guidelines.md` contains behaviour rules from eval — [Part 5](/articles/building-karpathy-knowledge-base-part-5) covers how those get generated.
+
+Progressive disclosure instead of context bloat. The agent pulls what it needs, when it needs it.
+
+---
+
+## Try it
+
+```bash
+npm install -g llm-kb
+llm-kb run ./my-documents
+```
+
+Ask a few questions. Then open `.llm-kb/wiki/wiki.md`. The concepts your questions created are already there — organized by topic, citing original sources, ready for the next question to build on.
+
+```bash
+llm-kb eval   # see your wiki hit rate climbing
+```
+
+[Part 5](/articles/building-karpathy-knowledge-base-part-5) adds the eval loop — how llm-kb judges its own answers, finds contradictions, and writes learned rules that make the next query better.
+
+[GitHub →](https://github.com/satish860/llm-kb)
+
+---
+
+**Related:** [Part 1: No Embeddings](/articles/building-karpathy-knowledge-base-part-1) · [Part 2: Pi SDK Sessions as RAG](/articles/building-karpathy-knowledge-base-part-2) · [Part 3: Every Query Makes It Smarter](/articles/building-karpathy-knowledge-base-part-3) · [PDF Parsing With Bounding Boxes](/articles/parsing-pdfs-with-bounding-boxes)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [Karpathy's gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) · [Farzapedia](https://x.com/FarzaTV/status/2040563939797504467)*

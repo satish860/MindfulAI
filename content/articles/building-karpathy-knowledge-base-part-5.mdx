@@ -1,0 +1,298 @@
+---
+title: "Building Karpathy's Knowledge Base — Part 5: The Eval Loop"
+date: 2026-04-07
+excerpt: "A wiki that maintains itself is only useful if it's accurate. llm-kb eval reads your session history, judges every answer against the source files, and writes learned rules back into the system. The wiki gets smarter. The agent gets more careful. The loop runs itself."
+template: "technical"
+category: "AI Engineering"
+tags: ["RAG", "knowledge-base", "LLM", "eval", "document-ai", "karpathy", "self-improving"]
+---
+
+[Part 4](/articles/building-karpathy-knowledge-base-part-4) built the concept wiki — knowledge organized by topic, updated after every query. A question about mob lynching creates `## Mob Lynching`. Next time, the agent answers from the wiki in 3 seconds instead of reading source files for 25.
+
+But the wiki maintains itself. How do you know it's right?
+
+Karpathy mentioned this briefly:
+
+> *"I've run some LLM 'health checks' over the wiki to find inconsistent data, impute missing data, find interesting connections — to incrementally clean up the wiki and enhance its overall data integrity."*
+
+This post is the implementation.
+
+---
+
+## What eval does
+
+```bash
+llm-kb eval
+```
+
+```
+llm-kb eval
+
+  Reading sessions...
+  Found 29 Q&A exchanges across sessions
+  Judging 1/29: "What are the 2023 new laws?"
+  Judging 2/29: "What is BNS 2023?"
+  ...
+  Judging 29/29: "How many files you have"
+
+  Results:
+  Queries analyzed:  29
+  Wiki hit rate:     66%
+  Wasted reads:      42
+  Issues:            22 errors  24 warnings
+  Wiki gaps:         28
+
+  Report: .llm-kb/wiki/outputs/eval-report.md
+```
+
+Eval reads every session JSONL file — the raw conversation logs Pi SDK writes automatically. For each Q&A exchange, it extracts:
+
+- What the user asked
+- What files the agent read (from tool call events)
+- What files were available but skipped
+- What the agent's thinking was
+- What the final answer said
+
+Then it runs Haiku as a judge on each exchange. Four checks:
+
+```
+┌─────────────────────────────────────────────┐
+│                                              │
+│  Citation validity                           │
+│  Agent says "Clause 303" — does the          │
+│  source file actually say "Clause 303"?      │
+│                                              │
+│  Contradictions                              │
+│  Agent says "sedition retained" — but the    │
+│  source says "sedition removed in BNS 2023"  │
+│                                              │
+│  Wiki gaps                                   │
+│  Topic asked about 4 times, still not in     │
+│  the wiki — agent re-reads files each time   │
+│                                              │
+│  Wasted reads                                │
+│  Agent read a file but never cited it in     │
+│  the answer — unnecessary cost               │
+│                                              │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## What the judge sees
+
+For each Q&A, Haiku gets the question, the answer, and the **actual file content** the agent read — not a summary. This is what makes it a real check rather than a guess:
+
+```markdown
+QUESTION: What changed with electronic evidence in 2023?
+
+ANSWER:
+Section 65B of the Indian Evidence Act requires a certificate
+from a responsible official...
+
+FILES READ BY AGENT:
+File: Indian Evidence Act.md
+Content (first 2000 chars):
+  Section 65B. Certificate — A person occupying a responsible
+  official position in relation to the operation of the
+  relevant device...
+
+FILES AVAILABLE BUT SKIPPED:
+  Comparison Chart.md, BNS Overview.md
+```
+
+Haiku compares the answer against the source text it was given. Did the agent quote the right clause number? Does the answer contradict anything in the file? Should a skipped file have been read?
+
+The judge returns structured findings:
+
+```json
+[
+  {
+    "type": "wiki-gap",
+    "severity": "warning",
+    "detail": "Electronic evidence certificate requirements
+               not in wiki",
+    "recommendation": "Add electronic evidence section
+                       to wiki"
+  }
+]
+```
+
+---
+
+## Two outputs, two audiences
+
+Eval writes two files. One for you. One for the agent.
+
+**`eval-report.md`** — for humans. What went wrong, which queries, what to fix:
+
+```markdown
+# Eval Report
+
+> 29 queries across 12 sessions · 2026-04-07
+
+## Performance
+
+| Metric                      | Value |
+|-----------------------------|-------|
+| Total queries               | 29    |
+| Avg duration                | 8.4s  |
+| Wiki hits (no file reads)   | 19 (66%) |
+| Needed source files         | 10    |
+| Total file reads            | 47    |
+| Wasted reads                | 42    |
+
+### Most Read Files
+
+| File                        | Times Read |
+|-----------------------------|------------|
+| indian penal code - new.md  | 8          |
+| Indian Evidence Act.md      | 6          |
+| Annotated comparison.md     | 5          |
+
+## 🔴 Errors (22)
+
+### citation: Answer references Clause 303 but source
+### text shows Clause 304
+- **Query:** What are the penalties for culpable homicide?
+- **Recommendation:** Cross-check clause numbers against
+  source before stating
+
+## 📝 Wiki Gaps (28)
+- Electronic evidence certificate requirements
+- Burden of proof changes in BSA 2023
+- Anticipatory bail provisions
+- ...
+```
+
+**`guidelines.md`** — for the agent. Learned rules injected into the next query session:
+
+```markdown
+## Eval Insights (auto-generated 2026-04-07)
+
+### Wiki Gaps — add to wiki when users ask about
+### these topics
+- Electronic evidence certificate requirements
+- Burden of proof changes in BSA 2023
+- Anticipatory bail provisions
+
+### Behaviour Fixes
+- Double-check clause numbers against source text
+  before stating them as fact.
+- Be more selective with file reads. Last eval found
+  42 wasted reads.
+
+### Heavily-Read Files — prefer wiki knowledge over
+### re-reading these
+- indian penal code - new.md (read 8 times)
+- Indian Evidence Act.md (read 6 times)
+
+### Performance
+- Wiki hit rate: 66% (target: 80%+)
+- Avg query time: 8.4s
+```
+
+The agent reads `guidelines.md` on-demand during queries — not forced into every system prompt, pulled via tool call when relevant. It's progressive disclosure. The system prompt stays lean. Learned behaviour is available when needed.
+
+---
+
+## The self-healing loop
+
+This is the part that closes the circle.
+
+```
+  Query: "electronic evidence rules?"
+    │
+    ▼
+  Agent reads source files (18s)
+  Wiki updater creates ## Electronic Evidence
+    │
+    ▼
+  llm-kb eval runs
+  Finds wiki-gap: "certificate requirements not cached"
+  Writes to guidelines.md
+    │
+    ▼
+  Next query about electronic evidence
+  Agent finds ## Electronic Evidence in wiki (3s)
+  Guidelines remind it to verify clause numbers
+    │
+    ▼
+  Eval runs again
+  Wiki hit rate: 66% → 72%
+  Fewer wasted reads
+  Fewer citation errors
+```
+
+Two things compound independently:
+
+- **`wiki.md`** grows with knowledge — what the documents contain
+- **`guidelines.md`** grows with behaviour — how the agent should use that knowledge
+
+The wiki answers faster. The guidelines answer more carefully. Eval drives both.
+
+---
+
+## Your rules alongside eval's rules
+
+`guidelines.md` has two sections. Eval writes the top. You write the bottom:
+
+```markdown
+## Eval Insights (auto-generated 2026-04-07)
+(eval's learned rules — regenerated each run)
+
+## My Rules
+
+- Always use Hindi transliterations for legal terms
+- For aviation leases: check both lessee and
+  lessor obligations
+- Respond in bullet points for clause-specific
+  questions
+```
+
+Eval never overwrites `## My Rules`. It only regenerates its own section. You can also create `guidelines.md` manually before ever running eval — the agent will find it and follow it.
+
+---
+
+## The metric that matters
+
+Wiki hit rate tells you if the system is actually learning.
+
+```
+After  5 queries:  20% wiki hit rate
+After 15 queries:  48% wiki hit rate
+After 29 queries:  66% wiki hit rate
+Target:            80%+
+```
+
+At 80%, four out of five questions are answered from cached knowledge — 3 seconds, zero file reads. The remaining 20% are genuinely new topics the wiki hasn't encountered.
+
+Wasted reads tell you if the agent is being efficient. 42 wasted reads across 29 sessions means files were opened but never cited. The eval report shows which files and which queries — patterns emerge (always reads the full act when only one section was needed).
+
+---
+
+## Try it
+
+```bash
+npm install -g llm-kb
+
+# Ask questions for a while
+llm-kb run ./my-documents
+
+# Then eval
+llm-kb eval
+
+# See what it found
+cat .llm-kb/wiki/outputs/eval-report.md
+cat .llm-kb/guidelines.md
+```
+
+The eval report shows what went wrong. The guidelines show what the agent learned. Run eval again after another week — wiki hit rate will be higher, wasted reads lower.
+
+[GitHub →](https://github.com/satish860/llm-kb)
+
+---
+
+**Related:** [Part 1: No Embeddings](/articles/building-karpathy-knowledge-base-part-1) · [Part 2: Pi SDK Sessions as RAG](/articles/building-karpathy-knowledge-base-part-2) · [Part 3: Every Query Makes It Smarter](/articles/building-karpathy-knowledge-base-part-3) · [Part 4: Concept Wiki](/articles/building-karpathy-knowledge-base-part-4) · [PDF Parsing With Bounding Boxes](/articles/parsing-pdfs-with-bounding-boxes)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [Karpathy's gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)*

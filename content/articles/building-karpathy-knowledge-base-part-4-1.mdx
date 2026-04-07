@@ -1,0 +1,376 @@
+---
+title: "Building Karpathy's Knowledge Base — Part 4.1: Building the Wiki Updater"
+date: 2026-04-07
+excerpt: "The code behind the concept wiki. A session watcher detects completed queries. A Haiku call reads the current wiki and the new Q&A, then returns the updated wiki organized by concept. Three files, no framework."
+template: "technical"
+category: "AI Engineering"
+tags: ["RAG", "knowledge-base", "LLM", "pi-sdk", "document-ai", "typescript", "tutorial"]
+---
+
+[Part 4](/articles/building-karpathy-knowledge-base-part-4) showed what the concept wiki looks like. This post shows how to build it.
+
+Three pieces:
+
+1. A **trace builder** that parses session files into structured Q&A objects
+2. A **wiki updater** that calls Haiku to merge new knowledge into the wiki
+3. A **session watcher** that connects them — detects completed queries and triggers the update
+
+No agent framework. No orchestration layer. Just file watching and one LLM call.
+
+---
+
+## The trace builder
+
+Pi SDK writes every conversation to a JSONL file in `.llm-kb/sessions/`. Each line is a JSON object — session headers, user messages, assistant messages with tool calls, tool results.
+
+The trace builder reads these files and extracts what we need:
+
+```typescript
+export interface KBTrace {
+  sessionId: string;
+  timestamp: string;
+  mode: "query" | "index" | "unknown";
+  question?: string;
+  answer?: string;
+  filesRead: string[];
+  filesAvailable: string[];
+  filesSkipped: string[];
+  model?: string;
+  durationMs?: number;
+}
+```
+
+The interesting part is extracting `filesRead`. The agent doesn't report which files it read — we infer it from tool calls:
+
+```typescript
+const filesRead: string[] = [];
+
+for (const entry of messages) {
+  if (entry.message?.role !== "assistant") continue;
+  for (const block of entry.message?.content ?? []) {
+    if (
+      block.type === "toolCall" &&
+      block.name === "read"
+    ) {
+      const path = block.arguments?.path ?? "";
+      if (path && !filesRead.includes(path)) {
+        filesRead.push(path);
+      }
+    }
+  }
+}
+```
+
+Every `read` tool call in the assistant's messages is a file the agent chose to open. We collect them, then compute `filesSkipped` as the difference between all available sources and what was actually read.
+
+This gives eval everything it needs: what the agent saw, what it ignored, what it said.
+
+---
+
+## The wiki updater
+
+This is the core. After each query, Haiku reads the current wiki and the new Q&A, then returns the complete updated wiki.
+
+Not an agent session — a direct `completeSimple()` call. No tools, no file access. Haiku gets text in, returns text out.
+
+```typescript
+import { getModels, completeSimple } from "@mariozechner/pi-ai";
+
+export async function updateWiki(
+  kbRoot: string,
+  trace: KBTrace,
+  authStorage?: AuthStorage,
+  indexModelId = "claude-haiku-4-5"
+): Promise<void> {
+  // Only update on query sessions with real Q&A
+  if (trace.mode !== "query" ||
+      !trace.question ||
+      !trace.answer) return;
+
+  // Read current wiki (might not exist yet)
+  const wikiPath = join(kbRoot, ".llm-kb", "wiki", "wiki.md");
+  const currentWiki = existsSync(wikiPath)
+    ? await readFile(wikiPath, "utf-8").catch(() => "")
+    : "";
+
+  // Build the prompt
+  const prompt = buildPrompt(
+    trace.question,
+    trace.answer,
+    sources,    // filenames the agent cited
+    date,       // today's date
+    currentWiki // existing wiki content
+  );
+
+  // Direct LLM call — no agent, no tools
+  const model = getModels("anthropic")
+    .find((m) => m.id === indexModelId);
+
+  const result = await completeSimple(
+    model,
+    {
+      systemPrompt:
+        "You are a precise knowledge librarian. " +
+        "Organize information by CONCEPT, not by " +
+        "source file. Return only clean markdown.",
+      messages: [{
+        role: "user",
+        content: prompt,
+        timestamp: Date.now(),
+      }],
+    },
+    { apiKey }
+  );
+
+  // Write the updated wiki
+  const text = result.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+
+  if (text) {
+    await writeFile(wikiPath, text + "\n", "utf-8");
+  }
+}
+```
+
+`completeSimple` is the Pi AI library's direct completion call — no session, no tools, no conversation history. One prompt in, one response out. That's all the wiki update needs.
+
+---
+
+## The prompt that makes it work
+
+The prompt has two versions — one for creating the first wiki, one for updating an existing one. The key is the rules section that stays the same in both:
+
+```typescript
+function buildPrompt(
+  question: string,
+  answer: string,
+  sources: string,
+  date: string,
+  currentWiki: string
+): string {
+  const rules = `
+Rules for wiki structure:
+- Use ## for CONCEPTS and TOPICS — NOT source file names
+  Good: "## Electronic Evidence", "## Mob Lynching"
+  Bad:  "## Indian Evidence Act.md"
+- Use ### for subtopics within a concept
+- A concept can draw from MULTIPLE source files
+  — synthesize, don't separate by file
+- If knowledge fits an existing concept, ADD to it
+  — never duplicate
+- If it's genuinely new, create a new ## section
+- Be concise: bullet points for lists
+- Add cross-references: See also: [[Other Concept]]
+- End each section with:
+  *Sources: file1, file2 · date*
+`;
+
+  if (currentWiki.trim()) {
+    return `You are maintaining a concept-organized wiki.
+
+## Current wiki
+${currentWiki}
+
+## New Q&A to integrate
+**Question:** ${question}
+**Sources used:** ${sources}
+**Date:** ${date}
+
+**Answer:**
+${answer}
+
+---
+Update the wiki to integrate this new knowledge.
+${rules}
+Return ONLY the complete updated wiki markdown.`;
+  }
+
+  // First-time creation
+  return `You are creating a concept-organized wiki.
+
+## First Q&A to add
+**Question:** ${question}
+**Sources used:** ${sources}
+**Date:** ${date}
+
+**Answer:**
+${answer}
+
+---
+Create a clean wiki from this Q&A.
+${rules}
+Return ONLY the wiki markdown.`;
+}
+```
+
+The rule "Use ## for CONCEPTS and TOPICS — NOT source file names" is the single most important line. Without it, Haiku defaults to naming sections after the source files — because that's what most training data looks like. With it, you get `## Mob Lynching` pulling from two different files.
+
+---
+
+## The session watcher
+
+The watcher connects the trace builder to the wiki updater. It watches `.llm-kb/sessions/` for completed session files:
+
+```typescript
+import { watch } from "chokidar";
+
+export async function startSessionWatcher(
+  kbRoot: string
+): Promise<void> {
+  const sessionsDir = join(kbRoot, ".llm-kb", "sessions");
+  const sourcesDir = join(kbRoot, ".llm-kb", "wiki", "sources");
+
+  // Track which sessions we've already processed
+  const processed = await loadProcessed(kbRoot);
+
+  async function processSession(
+    filePath: string
+  ): Promise<void> {
+    const sessionId = basename(filePath, ".jsonl")
+      .split("_")[1];
+    if (processed.has(sessionId)) return;
+
+    const trace = await buildTrace(filePath, sourcesDir);
+    if (!trace) return;
+
+    // Mark processed (survives restarts)
+    processed.add(trace.sessionId);
+    await markProcessed(kbRoot, trace.sessionId);
+
+    // Save trace JSON for eval
+    await saveTrace(kbRoot, trace);
+
+    // Update wiki and query log
+    if (trace.mode === "query") {
+      await appendToQueryLog(kbRoot, trace);
+      await updateWiki(kbRoot, trace);
+    }
+  }
+
+  const watcher = watch(sessionsDir, {
+    ignoreInitial: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 500,
+      pollInterval: 100,
+    },
+    depth: 0,
+  });
+
+  watcher.on("add", (p) => {
+    if (p.endsWith(".jsonl")) processSession(p);
+  });
+
+  watcher.on("change", (p) => {
+    if (p.endsWith(".jsonl")) processSession(p);
+  });
+}
+```
+
+Two things to notice:
+
+**`awaitWriteFinish`** — session files are written to incrementally as the conversation happens. We wait until the file is stable (500ms with no changes) before processing. Otherwise we'd parse a half-written session.
+
+**`loadProcessed` / `markProcessed`** — we write processed session IDs to `.llm-kb/traces/.processed`. This survives restarts. Stop llm-kb, start it again, and it won't reprocess old sessions.
+
+---
+
+## How it all connects
+
+```
+User asks a question
+    │
+    ▼
+createAgentSession() runs the query
+Pi SDK writes conversation to
+  .llm-kb/sessions/session_abc123.jsonl
+    │
+    ▼
+Session watcher detects the file
+  (chokidar, awaitWriteFinish: 500ms)
+    │
+    ▼
+buildTrace() parses the JSONL
+  → extracts question, answer, filesRead
+    │
+    ├─▶ saveTrace()
+    │     writes .llm-kb/traces/abc123.json
+    │
+    ├─▶ appendToQueryLog()
+    │     prepends to .llm-kb/wiki/queries.md
+    │
+    └─▶ updateWiki()
+          reads current wiki.md
+          calls Haiku with Q&A + current wiki
+          writes updated wiki.md
+```
+
+The user never sees any of this. They ask a question, get an answer. Behind the scenes, the wiki grows. Next time they ask something similar, the agent reads the wiki and answers in 3 seconds instead of reading source files for 25.
+
+---
+
+## Injecting the wiki into queries
+
+The last piece — making the query agent aware of the wiki. In `query.ts`, the wiki content is loaded and injected into the AGENTS.md:
+
+```typescript
+const wikiPath = join(folder, ".llm-kb", "wiki", "wiki.md");
+const wikiContent = existsSync(wikiPath)
+  ? await readFile(wikiPath, "utf-8")
+  : "";
+
+const agentsContent = buildQueryAgents(
+  mdFiles,
+  !!options.save,
+  wikiContent  // ← wiki injected here
+);
+```
+
+The AGENTS.md tells the agent to check the wiki first:
+
+```markdown
+## Knowledge Wiki (use this first)
+
+The wiki below contains knowledge already extracted
+from this knowledge base. If the user's question is
+covered here, answer directly from it — no need to
+re-read source files. Always cite the original source
+files mentioned in the wiki.
+
+## Mob Lynching
+First-ever criminalisation under BNS 2023...
+*Sources: indian penal code - new.md · 2026-04-06*
+
+---
+
+## If not covered in the wiki above: read the sources
+
+1. Read .llm-kb/wiki/index.md
+2. Select the most relevant source files
+3. Read them in full
+4. Answer with inline citations
+```
+
+Wiki first. Source files as fallback. That's why the wiki hit rate climbs — as the wiki grows, fewer queries need source file reads.
+
+---
+
+## The full code
+
+Three files, ~200 lines total:
+
+| File | Lines | What it does |
+|------|-------|-------------|
+| `trace-builder.ts` | ~80 | Parse session JSONL → KBTrace object |
+| `wiki-updater.ts` | ~70 | Haiku call to merge new Q&A into wiki |
+| `session-watcher.ts` | ~50 | Chokidar watcher connecting them |
+
+[Full source on GitHub →](https://github.com/satish860/llm-kb/tree/master/src)
+
+---
+
+**Related:** [Part 4: Concept Wiki](/articles/building-karpathy-knowledge-base-part-4) · [Part 2: Pi SDK Sessions](/articles/building-karpathy-knowledge-base-part-2) · [Part 3: Compounding Loop](/articles/building-karpathy-knowledge-base-part-3)
+
+*[GitHub](https://github.com/satish860/llm-kb) · [Pi SDK](https://github.com/mariozechner/pi) · [Pi AI library](https://github.com/nichochar/pi-ai)*
