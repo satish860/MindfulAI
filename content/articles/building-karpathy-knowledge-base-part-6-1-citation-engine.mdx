@@ -1,0 +1,310 @@
+---
+title: "How I Built Bounding Box Citation Verification for LLM Answers"
+date: 2026-04-12
+excerpt: "A technical deep dive into verifying LLM citations against PDF bounding box data. Three-tier matching (exact, normalized, fuzzy Levenshtein), text run building from PDF text items, and why false positives are worse than gaps in regulated industries."
+template: "technical"
+category: "AI Engineering"
+tags: ["citations", "PDF", "bounding-box", "LLM", "verification", "llm-kb", "document-ai", "TypeScript"]
+keywords:
+  - "PDF bounding box citation"
+  - "LLM citation verification"
+  - "Levenshtein fuzzy matching"
+  - "text run building PDF"
+  - "citation matching algorithm"
+faq:
+  - q: "How does bounding box citation matching work?"
+    a: "PDF pages are parsed into text items with x/y/width/height coordinates. Items are grouped into lines by Y-tolerance, concatenated into searchable text runs with position mappings. When a citation quote matches a substring, the character range maps back to bounding boxes."
+  - q: "How does fuzzy citation matching handle OCR errors?"
+    a: "A sliding window Levenshtein distance search over normalized text. Window sizes vary around the quote length to handle insertions/deletions. Matches with less than 20% edit distance get a confidence score of 0.5-0.8."
+---
+
+[Part 6](/articles/building-karpathy-knowledge-base-part-6-verified-citations) showed verified citations from the user's perspective -- click a citation, see the highlighted text on the PDF. This post is how it works under the hood.
+
+The full implementation is ~580 lines of TypeScript in `src/citations.ts`. No dependencies beyond Node's `fs` module.
+
+---
+
+## The problem
+
+An LLM answers a question about a document and says: "Total net sales were $394,328M [1]."
+
+We need to:
+1. Parse the `[1]` into a structured citation (file, page, quote)
+2. Find the quoted text on that PDF page
+3. Return the exact pixel coordinates of where the text appears
+4. Handle the fact that the LLM's quote may not exactly match the PDF text
+
+Steps 1 and 3 are straightforward. Step 2 is where the real work lives. Step 4 is where most systems give up.
+
+---
+
+## Data model
+
+```typescript
+interface CitationRecord {
+  file: string;          // "APPLE_2022_10K.pdf"
+  page: number;          // 24
+  quote: string;         // "Total net sales $ 394,328"
+  bbox?: BoundingBox;    // single-page: {x, y, width, height}
+  pages?: PageBBox[];    // multi-page: [{page, x, y, width, height}, ...]
+}
+
+interface MatchedCitation extends CitationRecord {
+  matched: boolean;      // did the quote match the source?
+  confidence: number;    // 0-1
+  boundingBoxes: BoundingBox[];   // individual word boxes
+  mergedRect: BoundingBox | null; // enclosing rectangle
+}
+```
+
+The agent returns a `CITATIONS:` block at the end of every response:
+
+```
+CITATIONS:
+[1] file: "APPLE_2022_10K.pdf", page: 24, quote: "Total net sales $ 394,328 8 % $ 365,817"
+[2] file: "APPLE_2022_10K.pdf", page: 24, quote: "iPhone (1) $ 205,489 7 %"
+[3] file: "MICROSOFT_2022_10K.pdf", page: 43, quote: "Revenue $ 198,270M"
+```
+
+A regex extracts these into `CitationRecord[]`. Handles both single-page and multi-page formats.
+
+---
+
+## Text run building: from PDF pixels to searchable text
+
+This is the foundation. PDF text items are individual words (sometimes individual characters) with pixel coordinates:
+
+```json
+{
+  "text": "Total",
+  "x": 72.5,
+  "y": 340.2,
+  "width": 28.3,
+  "height": 12.0
+}
+```
+
+A page might have 500+ of these items. They need to become searchable text while preserving the mapping back to coordinates.
+
+```typescript
+const Y_TOLERANCE = 3;       // px - items within this are same line
+const X_GAP_COLUMN = 15;     // px - gap larger than this = column separator
+
+function buildTextRun(textItems: TextItem[]): TextRun {
+  // 1. Filter empty items
+  // 2. Sort by y (top to bottom), then x (left to right)
+  // 3. Group into lines by Y_TOLERANCE
+  // 4. Sort within each line by x
+  // 5. Concatenate with spaces between items, newlines between lines
+  // 6. Track segments: each item maps to [startChar, endChar] in the text
+}
+```
+
+The key decisions:
+
+**Y_TOLERANCE = 3px.** PDF text items on the "same line" often have slightly different Y coordinates due to font metrics, subscripts, or OCR drift. 3px catches these without merging separate lines.
+
+**X_GAP_COLUMN = 15px.** Gap between words on the same line is typically 1-5px. Anything above 15px is a column separator -- insert double space instead of single. This preserves multi-column layouts without merging unrelated text.
+
+**Negative gaps.** When `gap < 0`, the items overlap -- kerned characters, bold-to-regular transitions, or OCR artifacts. No space inserted. The text just concatenates.
+
+The result is a `TextRun` with a `text` string and a `segments` array. Each segment maps a character range in the text back to pixel coordinates on the page.
+
+---
+
+## Three-tier matching
+
+Given a citation quote and a page's text run, find where the quote appears.
+
+### Tier 1: Exact substring (confidence 1.0)
+
+```typescript
+function findSubstring(haystack: string, needle: string): [number, number] | null {
+  const idx = haystack.indexOf(needle);
+  if (idx >= 0) return [idx, idx + needle.length];
+  return null;
+}
+```
+
+Fast, reliable. Works when the LLM quotes exactly what's in the PDF. Handles about 60% of citations in practice.
+
+### Tier 2: Normalized match (confidence 0.9)
+
+```typescript
+function normalize(s: string): string {
+  return s.toLowerCase()
+    .replace(/[^\w\s]/g, "")  // strip punctuation
+    .replace(/\s+/g, " ")     // collapse whitespace
+    .trim();
+}
+```
+
+The LLM often changes punctuation, collapses spaces, or shifts case. Normalizing both sides catches these differences.
+
+The tricky part: mapping the normalized match position back to the original string. The implementation walks the original string character by character, tracking how many "normalized characters" have been consumed, to find the exact original start/end positions.
+
+### Tier 3: Fuzzy Levenshtein (confidence 0.5-0.8)
+
+For OCR errors, minor paraphrasing, or character-level differences:
+
+```typescript
+function findFuzzy(
+  haystack: string,
+  needle: string,
+  maxDistRatio = 0.20    // allow 20% edit distance
+): [number, number, number] | null {
+  const normHay = normalize(haystack);
+  const normNeedle = normalize(needle);
+  const baseSize = normNeedle.length;
+  const maxDist = Math.ceil(baseSize * maxDistRatio);
+
+  // Sliding window: try window sizes from (length - maxDist) to (length + maxDist)
+  // At each position, compute Levenshtein distance
+  // Keep the best match below maxDist
+
+  const confidence = 1 - bestDist / baseSize;
+  return [origStart, origEnd, confidence];
+}
+```
+
+**Why variable window sizes?** Insertions and deletions change the length of the matched region. A quote of 50 characters might match a 47-character region (3 deletions) or a 53-character region (3 insertions). The window sweeps from `length - maxDist` to `length + maxDist`.
+
+**Why 20% threshold?** At 20%, a 50-character quote tolerates 10 edits. That catches OCR errors ("Ahgust" vs "August", "1otal" vs "Total") without matching unrelated text. Above 20%, false positive risk gets too high for regulated contexts.
+
+**Confidence scoring:** `1 - (editDistance / quoteLength)`. A 2-edit match on 50 characters = 0.96 confidence. A 10-edit match = 0.80. Below 0.5 is marked "not found."
+
+**Performance note:** Levenshtein over a sliding window is O(n^3). For a 5,000-character page and a 50-character quote, that's ~250,000 Levenshtein calls. Each one is O(50*50) = 2,500 operations. Total: ~625M operations. Takes 50-200ms per page. Acceptable for interactive use, but the implementation includes a `skipFuzzy` option for batch processing.
+
+---
+
+## From match to bounding boxes
+
+Once we have a character range `[start, end]` in the text run, extracting bounding boxes is a segment lookup:
+
+```typescript
+function getBoxesForRange(segments: TextSegment[], start: number, end: number): BoundingBox[] {
+  return segments.filter(seg => seg.end > start && seg.start < end).map(seg => seg.bbox);
+}
+```
+
+This returns one bounding box per PDF text item in the matched range. For display, we merge them into a single enclosing rectangle:
+
+```typescript
+function mergeBoxes(boxes: BoundingBox[]): BoundingBox | null {
+  if (boxes.length === 0) return null;
+  const minX = Math.min(...boxes.map(b => b.x));
+  const minY = Math.min(...boxes.map(b => b.y));
+  const maxX = Math.max(...boxes.map(b => b.x + b.width));
+  const maxY = Math.max(...boxes.map(b => b.y + b.height));
+  return {
+    x: round2(minX), y: round2(minY),
+    width: round2(maxX - minX), height: round2(maxY - minY)
+  };
+}
+```
+
+The merged rectangle is what gets drawn as the highlight overlay in the PDF viewer.
+
+---
+
+## Filename resolution
+
+The LLM writes filenames in citations. These don't always match the actual JSON files on disk. Resolution uses three passes:
+
+1. **Exact match** -- strip extensions, number prefixes, lowercase comparison
+2. **Substring containment** -- "APPLE_2022" matches "APPLE_2022_10K.pdf.json"
+3. **Fuzzy word matching** -- tokenize both names, compute word overlap score, threshold 0.6
+
+This handles the LLM writing "Apple 2022 10K" when the file is `APPLE_2022_10K.pdf`.
+
+---
+
+## Multi-page citations
+
+When a quote spans a page boundary (e.g., a sentence starting on page 17 and ending on page 18), the agent returns:
+
+```
+[4] file: "lease.pdf", pages: [17, 18], quote: "The lease term commences..."
+```
+
+The matcher runs on each page independently, collecting bounding boxes per page:
+
+```typescript
+pages: [
+  { page: 17, x: 72, y: 680, width: 468, height: 14 },
+  { page: 18, x: 72, y: 42, width: 234, height: 14 }
+]
+```
+
+The UI renders highlights on both pages. The citation card shows "bbox (2 pages)."
+
+---
+
+## The display contract
+
+The citation footer in the UI uses three states:
+
+| Icon | Meaning | When |
+|------|---------|------|
+| Green "bbox verified" | Quote found in source PDF, confidence >= 0.5 | Exact, normalized, or fuzzy match succeeded |
+| Yellow "approximate" | Fuzzy match with low confidence (0.5-0.7) | OCR-heavy PDFs, significant text differences |
+| Red "not found" | Quote not in source, or source has no bbox data | Non-PDF sources (DOCX, TXT), unmatched quotes |
+
+**Design principle:** False positives are worse than false negatives. A green "verified" badge on a wrong citation is more dangerous than a red "not found" on a correct one. That's why the confidence threshold is 0.5, not 0.3.
+
+---
+
+## Integration with eval
+
+`llm-kb eval` uses Haiku as a judge to check citation quality across all sessions:
+
+```
+Citations
+| Metric              | Value         |
+| Total citations     | 58            |
+| With bbox           | 52 (90%)      |
+| Answers w/ citations| 27/29 (93%)   |
+```
+
+The eval report flags:
+- **Citation errors:** "Agent quoted 'Clause 303' but source says 'Clause 304'"
+- **Missing citations:** Answers with factual claims but no `[N]` references
+- **Low bbox coverage:** If < 80% of citations have bounding boxes, something is wrong with parsing
+
+These findings flow into `guidelines.md` -- learned rules the agent reads before answering. The system corrects itself.
+
+---
+
+## What I'd do differently
+
+**Page-level JSON files.** Currently the full PDF's bounding box data is one JSON file. For a 100-page filing, that's 2-5MB loaded for a single page citation match. Splitting into per-page JSONs (`{name}.pages/24.json`) would make matching instant.
+
+**Pre-built text runs.** Building text runs at match time means repeating the work for every citation on the same page. Pre-computing and caching text runs at parse time would eliminate redundant work.
+
+**Confidence calibration.** The current 0.5 threshold is conservative. With enough data (citation match outcomes vs human verification), the threshold could be calibrated per-document-type. Scanned PDFs might tolerate 0.4. Native text PDFs could require 0.7.
+
+---
+
+## Try it
+
+llm-kb is still a developer tool. You need Node.js.
+
+```bash
+npm install -g llm-kb
+llm-kb run ./your-documents
+```
+
+The citation matching runs automatically on every query. No configuration needed.
+
+Source: [github.com/satish860/llm-kb](https://github.com/satish860/llm-kb) -- `src/citations.ts` has the full implementation.
+
+**Series:**
+- [Part 1: Building Karpathy's Knowledge Base Without Embeddings](/articles/building-karpathy-knowledge-base-part-1)
+- [Part 2: Pi SDK Sessions as RAG](/articles/building-karpathy-knowledge-base-part-2)
+- [Part 3: The Compounding Query Loop](/articles/building-karpathy-knowledge-base-part-3)
+- [Part 4: Concept Wiki (the Farzapedia pattern)](/articles/building-karpathy-knowledge-base-part-4)
+- [Part 4.1: Building the Wiki Updater](/articles/building-karpathy-knowledge-base-part-4-1)
+- [Part 5: Self-Correcting Eval Loop](/articles/building-karpathy-knowledge-base-part-5)
+- [Part 5.1: Building the Eval Loop](/articles/building-karpathy-knowledge-base-part-5-1)
+- [Part 6: Your AI's Citations Are Probably Wrong](/articles/building-karpathy-knowledge-base-part-6-verified-citations)
+- **Part 6.1: How I Built Bounding Box Citation Verification (this post)**

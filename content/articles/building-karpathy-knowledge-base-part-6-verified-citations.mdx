@@ -1,0 +1,144 @@
+---
+title: "Your AI's Citations Are Probably Wrong"
+date: 2026-04-12
+excerpt: "I tested ChatGPT, NotebookLM, Claude Cowork, and Perplexity on 366 SEC filings. Most of them can't tell you WHERE in the document they got the answer. llm-kb verifies every citation down to the exact bounding box on the PDF page."
+template: "technical"
+category: "AI Engineering"
+tags: ["citations", "document-ai", "llm-kb", "trust", "RAG", "knowledge-base", "verification"]
+keywords:
+  - "AI citation verification"
+  - "LLM citation accuracy"
+  - "document AI citations"
+  - "bounding box citations"
+  - "ChatGPT citation errors"
+  - "verified AI answers"
+faq:
+  - q: "How accurate are ChatGPT's citations?"
+    a: "Studies show ChatGPT fabricates 18-55% of citations. Nature (2023) documented this, and 206 court cases have involved AI-hallucinated legal references."
+  - q: "What is bounding box citation verification?"
+    a: "Instead of just saying 'page 12', the system matches the quoted text to exact pixel coordinates on the PDF page. You click a citation and the source document opens with the exact text highlighted."
+  - q: "Can I use llm-kb on my own documents?"
+    a: "Yes, but it is currently a developer tool requiring Node.js. We are working on making it accessible to non-developers. npm install -g llm-kb to try it today."
+---
+
+Last week I built [Karpathy's knowledge base without embeddings](/articles/building-karpathy-knowledge-base-part-1). 26,000 people saw the LinkedIn post. I shipped a [compounding wiki](/articles/building-karpathy-knowledge-base-part-3) and a [self-correcting eval loop](/articles/building-karpathy-knowledge-base-part-5).
+
+The biggest pushback: "Cool, but how do I trust the answers?"
+
+Fair question. I went and fixed it.
+
+---
+
+## The citation problem nobody talks about
+
+Every AI tool gives you answers. Very few can prove where those answers came from.
+
+I work in aviation leasing and financial compliance. When an AI tells me a lease starts on March 15, 2019, I need to see clause 3.1 on page 47. Not "page 12." Not a footnote to a URL. The exact text, on the exact page, highlighted so I can verify it in seconds.
+
+I looked at what every major tool does today.
+
+**ChatGPT** fabricates 18-55% of its citations. A Nature study (doi:10.1038/s41598-023-41032-5) documented this in 2023. As of July 2025, there are 206 documented court cases where attorneys submitted AI-hallucinated legal references. ChatGPT presents false citations confidently -- it only hedged in 15 of 134 incorrect citations tested.
+
+**Perplexity** does cite sources, but mostly as URL footnotes. According to the Tow Center for Digital Journalism (March 2025), it still has a 37-45% citation error rate, and 3-13% of citation URLs point to pages that do not exist. Even when it lands on the right source, the cited evidence is often reformatted or paraphrased, so you cannot tell what came from the document verbatim and what the model normalized on the way out.
+
+**NotebookLM** is better grounded because it stays inside your uploaded sources, but the same verification problem remains. It cites "Source 1" or "Source 2" and shows supporting snippets, yet it can flatten formatting, collapse tables, or restate text instead of preserving the exact passage as it appeared in the file. You know the answer is probably from that source. You still do not know the exact location, exact layout, or exact text span without checking manually.
+
+**Claude Cowork** is the closest. Anthropic's API provides character-level and page-level verified citations. The cited text is extracted directly from the source, not generated. But there are no bounding boxes, and Cowork is designed as a workflow agent, not a batch document Q&A system.
+
+**RAG frameworks** (LlamaIndex, LangChain) require you to build citation logic yourself. That means choosing a vector database, embedding model, chunking strategy, and retrieval pipeline. Weeks of engineering to get citations that still have no structural guarantee of accuracy.
+
+---
+
+## What verified citations actually look like
+
+llm-kb now verifies every citation down to the exact bounding box on the PDF page.
+
+I tested it on 366 SEC 10-K filings -- Apple, Microsoft, Amazon, Boeing, Pfizer, and 35 other companies. Public filings from the FinanceBench dataset. Anyone can download the same documents and verify.
+
+![llm-kb terminal showing 366 parsed sources](/images/llmkb-terminal-status.png)
+*366 SEC filings indexed. No vector database. No embeddings. Just parsed markdown and an agent.*
+
+I asked: "Compare Apple and Microsoft revenue in 2022 with citations."
+
+![llm-kb web UI with question typed](/images/llmkb-ui-question.png)
+*The question typed into llm-kb's web interface. 366 sources available, 15 wiki concepts already cached from previous queries.*
+
+The agent found the right filings, extracted revenue data, and returned a structured comparison:
+
+![Revenue comparison table with inline citations](/images/llmkb-answer-tables.png)
+*Apple $394B vs Microsoft $198B. Every number has an inline citation [1] [2] [3] [4] pointing to the exact source.*
+
+![Key observations with citations](/images/llmkb-answer-observations.png)
+*Key observations: Apple nearly 2x Microsoft's revenue, but Microsoft growing faster. Each claim cited.*
+
+Here is the part that matters. Below the answer, every citation is verified:
+
+![Citation cards showing bbox verified status](/images/llmkb-citation-cards.png)
+*Each citation shows the source file, page number, exact quoted text, and a green "bbox verified" badge. The quote was matched against bounding box data from the parsed PDF.*
+
+Click any citation. The source PDF opens with the text highlighted:
+
+![Split view showing answer and Microsoft 10-K with highlighted text](/images/llmkb-splitview-microsoft.png)
+*Microsoft's 2022 10-K, page 43. The revenue data highlighted with a bounding box overlay.*
+
+![Split view showing answer and Apple 10-K with highlighted revenue table](/images/llmkb-splitview-apple.png)
+*Apple's 2022 10-K, page 24. The revenue breakdown table with highlighted rows matching the citation.*
+
+Every claim traced to the exact location in the source document. In seconds. Across 366 filings.
+
+---
+
+## The comparison
+
+| Feature | ChatGPT | Perplexity | NotebookLM | Claude Cowork | llm-kb |
+|---------|---------|------------|------------|---------------|--------|
+| Citation type | Prompt-based | URL/source footnotes | Source anchors + snippets | Page-level verified | Bounding box verified |
+| Citation accuracy | 45-82% | 55-63% | ~86% grounded | High (API-verified) | Structural match with confidence score |
+| Bounding boxes | No | No | No | No | Yes |
+| Click to verify | No | URL only | Partial -- source panel, not exact location | No | Yes -- PDF opens, text highlighted |
+| Max documents | 40 (Enterprise) | 50,000 (Enterprise Max) | 600 per notebook | Workflow-based | Tested on 366, no hard limit |
+| Self-improvement | None | None | None | Basic | Eval loop + wiki compounding |
+| Infrastructure | Cloud | Cloud | Cloud | Desktop app | npm install, local files |
+
+---
+
+## Why this matters for regulated industries
+
+In aviation, finance, legal, and compliance -- "trust me" is not an answer.
+
+Auditors need to trace every number to its source. Compliance officers need to verify every regulatory reference. Lawyers need to confirm every clause citation.
+
+A 37% citation error rate is not a minor inconvenience. It is a liability.
+
+Verified citations are not a feature. They are the minimum standard for any AI system used in production with real documents.
+
+---
+
+## Try it (developers only, for now)
+
+llm-kb is still a developer tool. You need Node.js and a terminal to run it. We are working hard to make it accessible to everyone -- a version that anyone can install and use without technical setup is coming soon.
+
+If you are a developer:
+
+```bash
+npm install -g llm-kb
+llm-kb run ./your-documents
+llm-kb eval
+```
+
+Drop your PDFs in a folder. Ask questions. Every answer comes with verified citations.
+
+**This is Part 6 of the series:**
+
+- [Part 1: Building Karpathy's Knowledge Base Without Embeddings](/articles/building-karpathy-knowledge-base-part-1)
+- [Part 2: Pi SDK Sessions as RAG](/articles/building-karpathy-knowledge-base-part-2)
+- [Part 3: The Compounding Query Loop](/articles/building-karpathy-knowledge-base-part-3)
+- [Part 4: Concept Wiki (the Farzapedia pattern)](/articles/building-karpathy-knowledge-base-part-4)
+- [Part 4.1: Building the Wiki Updater](/articles/building-karpathy-knowledge-base-part-4-1)
+- [Part 5: Self-Correcting Eval Loop](/articles/building-karpathy-knowledge-base-part-5)
+- [Part 5.1: Building the Eval Loop](/articles/building-karpathy-knowledge-base-part-5-1)
+- **Part 6: Verified Citations (this post)**
+
+Next up: Scale and cost breakdowns.
+
+GitHub: [github.com/satish860/llm-kb](https://github.com/satish860/llm-kb)
