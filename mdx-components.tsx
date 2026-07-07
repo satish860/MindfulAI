@@ -4,6 +4,7 @@ import { CodeBlock } from './app/components/CodeBlock'
 import { MermaidDiagram } from './app/components/MermaidDiagram'
 import { InteractiveSandbox } from './app/components/InteractiveSandbox'
 import { SandboxTabs } from './app/components/SandboxTabs'
+import { DocumentShowcase } from './app/components/DocumentShowcase'
 
 // Helper function to generate slug from heading text
 function generateSlug(text: string): string {
@@ -87,6 +88,7 @@ export function getMDXComponents(components: MDXComponents): MDXComponents {
     ),
     InteractiveSandbox,
     SandboxTabs,
+    DocumentShowcase,
     ...components,
   }
 }
