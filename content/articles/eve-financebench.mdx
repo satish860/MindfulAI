@@ -1,14 +1,16 @@
 ---
-title: "eve Is Next.js for Agents: What I Learned Building FinanceBench on It"
+title: "The eve Agent Framework Is Next.js for AI Agents: What I Learned Building FinanceBench on It"
 date: "2026-10-25"
-excerpt: "I used a real project to learn eve. The project is FinanceBench: 150 questions about real company reports, with real gold answers and real scores. eve has conventions that do the setup for you. Thus I used my time on the agent, not on the setup."
+excerpt: "The eve framework from Vercel is for building AI agents in TypeScript. I used a real project to learn it: FinanceBench, 150 questions about real company reports, with real gold answers and real scores. The framework's conventions do the setup for you. Thus I used my time on the agent, not on the setup."
 template: "technical"
 category: "AI Engineering"
 ---
 
+**What is eve?** It is a framework from Vercel for building AI agents in TypeScript ([eve.dev](https://eve.dev)). The name is always written in lowercase. In this post, "eve" always means this framework.
+
 134 to 137 correct answers from 150 questions. That is 89.3% to 91.3%, depending on the run.
 
-An eve agent got these scores on FinanceBench. The model was DeepSeek V4.1 Flash. The best run was 137/150. The latest run was 134/150.
+An agent built with eve got these scores on FinanceBench. The model was DeepSeek V4.1 Flash. The best run was 137/150. The latest run was 134/150.
 
 FinanceBench is a public benchmark. It has 150 questions about real company reports: 10-K, 10-Q, 8-K and earnings reports. Analysts wrote a gold answer for each question. Two example questions:
 
@@ -23,7 +25,7 @@ These scores are real. The benchmark is real. That was my aim.
 
 ## Why I used a real project
 
-I want to learn eve. Then I want to teach eve to you.
+I want to learn the eve framework. Then I want to teach it to you.
 
 A todo app does not teach much. It does not fail in a useful way.
 
@@ -31,9 +33,9 @@ A benchmark is different. Each question has a correct answer. The benchmark tell
 
 ---
 
-## eve is like Next.js for agents
+## The eve framework is like Next.js for agents
 
-eve is like Next.js. Convention over ceremony.
+The eve framework is like Next.js. Convention over ceremony.
 
 In Next.js, a file in `app/` becomes a route. In eve, a file in `agent/` becomes a part of the agent:
 
@@ -46,9 +48,9 @@ In Next.js, a file in `app/` becomes a route. In eve, a file in `agent/` becomes
 | `agent/sandbox/` | The workspace and the isolated machine for the agent |
 | `evals/*.eval.ts` | Tests for the agent |
 
-You do not connect these parts. You put a file in the correct folder. eve finds the file.
+You do not connect these parts. You put a file in the correct folder. The framework finds the file.
 
-For most other tasks, you use one command. eve has its own CLI. In this project, I used `eve link` and `eve eval`. The CLI also has commands such as `eve add` and `eve deploy`. Thus the instructions for a task are short.
+For most other tasks, you use one command. The framework has its own CLI. In this project, I used `eve link` and `eve eval`. The CLI also has commands such as `eve add` and `eve deploy`. Thus the instructions for a task are short.
 
 The best practices are part of eve. You see what to do, rather than how to do it.
 
@@ -74,7 +76,7 @@ export default defineAgent({
 
 To compare models, I changed one environment variable. I ran the same evals on five models:
 
-- minimax-m3
+- MiniMax M3
 - Claude Haiku 5.5
 - GPT-6 Luna
 - GPT-6 Luna Fast
@@ -102,7 +104,7 @@ export const environment = DockerSandbox.environment();
 export default defineSandbox(() => environment.open({ networkPolicy: "deny-all" }));
 ```
 
-The reports are in `agent/sandbox/workspace/reports/`. For each session, eve copies the reports into a new Docker container. The agent reads the reports with `grep` and `sed` in `bash`.
+The reports are in `agent/sandbox/workspace/reports/`. For each session, the framework copies the reports into a new Docker container. The agent reads the reports with `grep` and `sed` in `bash`.
 
 Each question gets a clean workspace, without hard labour.
 
@@ -146,9 +148,9 @@ This table shows the score history. Read the notes below the table.
 
 | Version | Model | Judge | Score | Model cost |
 |---|---|---|---|---|
-| First baseline | minimax-m3 | v1 | 121/150 (80.7%) | $1.05 |
-| Better instructions + ratio formulas | minimax-m3 | v2 | 132/150 (88.0%) | $1.09 |
-| Formulas moved into the instructions | minimax-m3 | v3 | 137/150 (91.3%) | $1.09 |
+| First baseline | MiniMax M3 | v1 | 121/150 (80.7%) | $1.05 |
+| Better instructions + ratio formulas | MiniMax M3 | v2 | 132/150 (88.0%) | $1.09 |
+| Formulas moved into the instructions | MiniMax M3 | v3 | 137/150 (91.3%) | $1.09 |
 | Different model | DeepSeek V4.1 Flash | v3 | 137/150 (91.3%) | $0.16 |
 | Three more instruction rules | DeepSeek V4.1 Flash | v3 | 134/150 (89.3%) | $1.11 |
 
@@ -166,13 +168,13 @@ The agent did not make all of this increase. These are the other causes:
 - **One run does not prove a result.** The judge gave the same answer (36.5%) a "correct" label in one run and an "incorrect" label in the next run. The last row is 3 questions lower than the row above it. Most of this difference is from this judge noise. Do not accept a change of less than approximately 3 questions until you see it in more than one run.
 - **The cost changed, but the code did not.** The last run used the same quantity of tokens as the run above it. But it cost 7 times more. Possibly, the gateway sent the requests to a more expensive provider.
 
-The DeepSeek rows and the minimax row for v3 use the same judge and the same corrected gold answers. Thus you can compare them directly. In the best runs, the score is the same. In that comparison, DeepSeek cost approximately one seventh.
+The DeepSeek rows and the MiniMax row for v3 use the same judge and the same corrected gold answers. Thus you can compare them directly. In the best runs, the score is the same. In that comparison, DeepSeek cost approximately one seventh.
 
 ---
 
 ## Limits
 
-eve is in preview. The eve documents say that the APIs can change before general availability.
+The eve framework is in preview. Its documents say that the APIs can change before general availability.
 
 The Docker sandbox runs on your local computer. To deploy this agent on Vercel, you must change to the Vercel Sandbox. I did not do this yet.
 
