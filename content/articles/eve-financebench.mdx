@@ -1,0 +1,201 @@
+---
+title: "eve Is Next.js for Agents: What I Learned Building FinanceBench on It"
+date: "2026-10-25"
+excerpt: "I used a real project to learn eve. The project is FinanceBench: 150 questions about real company reports, with real gold answers and real scores. eve has conventions that do the setup for you. Thus I used my time on the agent, not on the setup."
+template: "technical"
+category: "AI Engineering"
+---
+
+134 to 137 correct answers from 150 questions. That is 89.3% to 91.3%, depending on the run.
+
+An eve agent got these scores on FinanceBench. The model was DeepSeek V4.1 Flash. The best run was 137/150. The latest run was 134/150.
+
+FinanceBench is a public benchmark. It has 150 questions about real company reports: 10-K, 10-Q, 8-K and earnings reports. Analysts wrote a gold answer for each question. Two example questions:
+
+- "Does Corning have positive working capital based on FY2022 data?"
+- "What is the FY2017 return on assets for Coca Cola?"
+
+The FinanceBench paper also gives a score for GPT-4-Turbo. In that test, GPT-4-Turbo got the full report in its context. Its score was 79%. That score uses the paper's grading and the original gold answers. Our later scores use a stricter number check and 5 corrected gold answers. Thus this is not an exact comparison. Our first baseline used the original gold answers. It got 121/150 (80.7%).
+
+These scores are real. The benchmark is real. That was my aim.
+
+---
+
+## Why I used a real project
+
+I want to learn eve. Then I want to teach eve to you.
+
+A todo app does not teach much. It does not fail in a useful way.
+
+A benchmark is different. Each question has a correct answer. The benchmark tells you when your agent is wrong. Also, this benchmark is like our work. The agent reads a long document. It finds the numbers. It calculates. It gives an answer and shows the evidence.
+
+---
+
+## eve is like Next.js for agents
+
+eve is like Next.js. Convention over ceremony.
+
+In Next.js, a file in `app/` becomes a route. In eve, a file in `agent/` becomes a part of the agent:
+
+| File or folder | What it becomes |
+|---|---|
+| `agent/instructions.md` | The system prompt |
+| `agent/agent.ts` | The model and the runtime settings |
+| `agent/tools/*.ts` | Tools that the model can call |
+| `agent/skills/*.md` | Procedures that the model loads only when it needs them |
+| `agent/sandbox/` | The workspace and the isolated machine for the agent |
+| `evals/*.eval.ts` | Tests for the agent |
+
+You do not connect these parts. You put a file in the correct folder. eve finds the file.
+
+For most other tasks, you use one command. eve has its own CLI. In this project, I used `eve link` and `eve eval`. The CLI also has commands such as `eve add` and `eve deploy`. Thus the instructions for a task are short.
+
+The best practices are part of eve. You see what to do, rather than how to do it.
+
+In the first hour of work, I created the agent and ran it with an eval. It is just there. Everything is clear on what to do.
+
+---
+
+## What I did not have to build
+
+### Model change
+
+The model configuration of this agent has 7 lines:
+
+```ts
+import { defineAgent } from "eve";
+
+// FB_MODEL picks the answering model for model comparisons (Story 8); same reasoning for all.
+export default defineAgent({
+  model: process.env.FB_MODEL || "deepseek/deepseek-v4.1-flash-1017",
+  reasoning: "high",
+});
+```
+
+To compare models, I changed one environment variable. I ran the same evals on five models:
+
+- minimax-m3
+- Claude Haiku 5.5
+- GPT-6 Luna
+- GPT-6 Luna Fast
+- DeepSeek V4.1 Flash
+
+I did not write new client code. I did not add a new SDK.
+
+### API keys
+
+`eve link` connects the project to Vercel. Then the agent calls the models through the Vercel AI Gateway.
+
+This repo has no OpenAI key, no Anthropic key and no DeepSeek key. It has only one secret: a Vercel token in `.env.local`. The link step wrote this token.
+
+### The sandbox
+
+The agent must read 84 reports. It must not use the internet. The sandbox file has 10 lines:
+
+```ts
+import { defineSandbox } from "eve/sandbox";
+import { DockerSandbox } from "eve/sandbox/docker";
+
+export const environment = DockerSandbox.environment();
+
+// No network: answers must come from the reports in /workspace/reports.
+export default defineSandbox(() => environment.open({ networkPolicy: "deny-all" }));
+```
+
+The reports are in `agent/sandbox/workspace/reports/`. For each session, eve copies the reports into a new Docker container. The agent reads the reports with `grep` and `sed` in `bash`.
+
+Each question gets a clean workspace, without hard labour.
+
+To remove a built-in tool, you write one file. The file has one line of logic:
+
+```ts
+import { disableTool } from "eve/tools";
+export default disableTool();
+```
+
+### Evals and traces
+
+Without eve, this is the part I would spend the most time on.
+
+There is one eval for each question. Each eval does three things:
+
+1. It sends the question to the agent.
+2. It makes sure that the reply has an `ANSWER:` line.
+3. It tells a judge model to compare the answer with the gold answer.
+
+```ts
+const turn = await t.send(questionMessage(q));
+t.succeeded();
+t.check(turn.message, includes("ANSWER:"));
+t.judge({ state: judgeState(q, turn.message ?? ""), questions: { correctness: JUDGE_QUESTION } });
+```
+
+`eve eval` runs all 150 evals. It runs 8 evals at the same time. A full run takes approximately 10 minutes.
+
+Each run writes its results to `.eve/evals/<timestamp>/`. The results include a full trace for each question. The trace shows each model step, each tool call, each command and the cost. I did not configure this.
+
+When an answer was wrong, I opened its trace. The trace showed what the agent searched for and what it read.
+
+This is the most important thing that eve gave me. I worked on the logic and on improvements, not on the configuration of the application.
+
+---
+
+## The scores
+
+This table shows the score history. Read the notes below the table.
+
+| Version | Model | Judge | Score | Model cost |
+|---|---|---|---|---|
+| First baseline | minimax-m3 | v1 | 121/150 (80.7%) | $1.05 |
+| Better instructions + ratio formulas | minimax-m3 | v2 | 132/150 (88.0%) | $1.09 |
+| Formulas moved into the instructions | minimax-m3 | v3 | 137/150 (91.3%) | $1.09 |
+| Different model | DeepSeek V4.1 Flash | v3 | 137/150 (91.3%) | $0.16 |
+| Three more instruction rules | DeepSeek V4.1 Flash | v3 | 134/150 (89.3%) | $1.11 |
+
+The agent did not make all of this increase. These are the other causes:
+
+- **The judge changed.** Judge v3 uses code to compare numbers. The judge model could not always see that 1.42% and 0.01 are the same value with different rounding.
+- **Some gold answers changed.** An AI coding agent examined each failed question against its report on my instruction. It found 5 gold answers that were wrong:
+  - one arithmetic error,
+  - one fact that was out of date,
+  - one sign that was reversed,
+  - one value with incorrect rounding,
+  - one incorrect conclusion.
+
+  I did not examine these corrections myself. The agent wrote the report file and line numbers for each correction. The corrections are in a separate file (`evals/data/gold-corrections.json`), with that evidence. You can examine each one against the report. The original dataset did not change.
+- **One run does not prove a result.** The judge gave the same answer (36.5%) a "correct" label in one run and an "incorrect" label in the next run. The last row is 3 questions lower than the row above it. Most of this difference is from this judge noise. Do not accept a change of less than approximately 3 questions until you see it in more than one run.
+- **The cost changed, but the code did not.** The last run used the same quantity of tokens as the run above it. But it cost 7 times more. Possibly, the gateway sent the requests to a more expensive provider.
+
+The DeepSeek rows and the minimax row for v3 use the same judge and the same corrected gold answers. Thus you can compare them directly. In the best runs, the score is the same. In that comparison, DeepSeek cost approximately one seventh.
+
+---
+
+## Limits
+
+eve is in preview. The eve documents say that the APIs can change before general availability.
+
+The Docker sandbox runs on your local computer. To deploy this agent on Vercel, you must change to the Vercel Sandbox. I did not do this yet.
+
+`eve eval` has no option to repeat a run. To measure the noise, run `eve eval` more than one time. Then compare the runs yourself.
+
+---
+
+## What I want you to do
+
+Use eve for your next new project. For example: lease extraction, RegTech, or a different project where an agent reads documents and must give correct answers.
+
+The parts of this repo are the same as the parts of our work:
+
+| FinanceBench | Our work |
+|---|---|
+| 84 reports in the sandbox workspace | The leases or regulations of the client |
+| 150 questions with gold answers | Questions with answers that our experts verified |
+| One eval for each question | One eval for each question |
+| `FB_MODEL` | Compare models before you select one |
+| A trace for each answer | The evidence when we must explain an answer |
+
+Write the evals first. Then improve the agent. Monitor the score after each change.
+
+The first commit of this project was on 24 October at 12:42. The last code commit was on 25 October at 19:37. I did other work between these commits. The code itself took less time.
+
+The repo is at [github.com/satish860/financebench-eve](https://github.com/satish860/financebench-eve). Clone it. Run `eve eval`. Then read the traces.
