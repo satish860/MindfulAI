@@ -4,6 +4,34 @@ date: "2026-10-25"
 excerpt: "The eve framework from Vercel is for building AI agents in TypeScript. I used a real project to learn it: FinanceBench, 150 questions about real company reports, with real gold answers and real scores. The framework's conventions do the setup for you. Thus I used my time on the agent, not on the setup."
 template: "technical"
 category: "AI Engineering"
+keywords:
+  - "eve framework"
+  - "Vercel eve"
+  - "eve agent framework"
+  - "TypeScript AI agent framework"
+  - "FinanceBench"
+  - "FinanceBench benchmark"
+  - "financial question answering"
+  - "AI agent evals"
+  - "LLM as a judge"
+  - "Vercel AI Gateway"
+  - "DeepSeek V4.1 Flash"
+  - "agent sandbox Docker"
+  - "document AI agents"
+  - "LLM benchmark gold answer errors"
+faq:
+  - q: "What is the eve framework?"
+    a: "The eve framework (eve.dev) is from Vercel. You use it to build AI agents in TypeScript. You write an agent as files: instructions in agent/instructions.md, model settings in agent/agent.ts, tools in agent/tools/, skills in agent/skills/, the sandbox in agent/sandbox/, and tests in evals/. The framework finds these files by convention, like Next.js finds routes, and gives a CLI, a sandbox, evals and traces without extra setup."
+  - q: "What score does an eve agent get on FinanceBench?"
+    a: "An eve agent with DeepSeek V4.1 Flash answered 134 to 137 of the 150 open-source FinanceBench questions correctly (89.3% to 91.3%), depending on the run. These scores use a judge that compares numbers in code and 5 corrected gold answers. The first baseline, with MiniMax M3 and the original gold answers, scored 121/150 (80.7%). The FinanceBench paper reports 79% for GPT-4-Turbo with the full report in context."
+  - q: "How do you switch models in an eve agent?"
+    a: "Change the model field in agent/agent.ts to another Vercel AI Gateway model id. After eve link connects the project to Vercel, the agent calls models through the AI Gateway, so the repo needs no OpenAI, Anthropic or DeepSeek API key. The FinanceBench agent reads the model id from an environment variable, so one variable change runs the same evals on a different model."
+  - q: "How do evals and traces work in eve?"
+    a: "Each file in evals/ that ends in .eval.ts defines evals with defineEval. An eval sends a message to the agent, checks the reply, and can ask a judge model to grade it with t.judge. The command eve eval runs the evals in parallel and writes results and a full trace for each eval to .eve/evals/<timestamp>/, with every model step, tool call, command and cost."
+  - q: "Are FinanceBench gold answers always correct?"
+    a: "No. In this project, an AI coding agent checked each failed question against its report and found 5 gold answers that contradict the report: an arithmetic error, an out-of-date fact, a reversed sign, a rounding error and a wrong conclusion. The corrections, with report line evidence, are in evals/data/gold-corrections.json in the financebench-eve repo. No person has checked them yet."
+  - q: "Can you deploy an eve agent that uses a Docker sandbox to Vercel?"
+    a: "Not as it is. The Docker sandbox runs on a local computer. To deploy on Vercel, the agent must use the Vercel Sandbox instead. The eve framework is also in preview, and its documents say that the APIs can change before general availability."
 ---
 
 **What is eve?** It is a framework from Vercel for building AI agents in TypeScript ([eve.dev](https://eve.dev)). The name is always written in lowercase. In this post, "eve" always means this framework.
@@ -12,12 +40,12 @@ category: "AI Engineering"
 
 An agent built with eve got these scores on FinanceBench. The model was DeepSeek V4.1 Flash. The best run was 137/150. The latest run was 134/150.
 
-FinanceBench is a public benchmark. It has 150 questions about real company reports: 10-K, 10-Q, 8-K and earnings reports. Analysts wrote a gold answer for each question. Two example questions:
+[FinanceBench](https://github.com/patronus-ai/financebench) is a public benchmark from Patronus AI. It has 150 open-source questions about real company reports: 10-K, 10-Q, 8-K and earnings reports. Analysts wrote a gold answer for each question. Two example questions:
 
 - "Does Corning have positive working capital based on FY2022 data?"
 - "What is the FY2017 return on assets for Coca Cola?"
 
-The FinanceBench paper also gives a score for GPT-4-Turbo. In that test, GPT-4-Turbo got the full report in its context. Its score was 79%. That score uses the paper's grading and the original gold answers. Our later scores use a stricter number check and 5 corrected gold answers. Thus this is not an exact comparison. Our first baseline used the original gold answers. It got 121/150 (80.7%).
+The [FinanceBench paper](https://arxiv.org/abs/2311.11944) also gives a score for GPT-4-Turbo. In that test, GPT-4-Turbo got the full report in its context. Its score was 79%. That score uses the paper's grading and the original gold answers. Our later scores use a stricter number check and 5 corrected gold answers. Thus this is not an exact comparison. Our first baseline used the original gold answers. It got 121/150 (80.7%).
 
 These scores are real. The benchmark is real. That was my aim.
 
@@ -201,3 +229,37 @@ Write the evals first. Then improve the agent. Monitor the score after each chan
 The first commit of this project was on 24 October at 12:42. The last code commit was on 25 October at 19:37. I did other work between these commits. The code itself took less time.
 
 The repo is at [github.com/satish860/financebench-eve](https://github.com/satish860/financebench-eve). Clone it. Run `eve eval`. Then read the traces.
+
+---
+
+## Frequently asked questions
+
+**What is the eve framework?**
+
+The eve framework ([eve.dev](https://eve.dev)) is from Vercel. You use it to build AI agents in TypeScript. You write an agent as files: instructions in `agent/instructions.md`, model settings in `agent/agent.ts`, tools in `agent/tools/`, skills in `agent/skills/`, the sandbox in `agent/sandbox/`, and tests in `evals/`. The framework finds these files by convention, like Next.js finds routes, and gives a CLI, a sandbox, evals and traces without extra setup.
+
+**What score does an eve agent get on FinanceBench?**
+
+An eve agent with DeepSeek V4.1 Flash answered 134 to 137 of the 150 open-source FinanceBench questions correctly (89.3% to 91.3%), depending on the run. These scores use a judge that compares numbers in code and 5 corrected gold answers. The first baseline, with MiniMax M3 and the original gold answers, scored 121/150 (80.7%). The FinanceBench paper reports 79% for GPT-4-Turbo with the full report in context.
+
+**How do you switch models in an eve agent?**
+
+Change the `model` field in `agent/agent.ts` to another Vercel AI Gateway model id. After `eve link` connects the project to Vercel, the agent calls models through the AI Gateway, so the repo needs no OpenAI, Anthropic or DeepSeek API key. The FinanceBench agent reads the model id from an environment variable, so one variable change runs the same evals on a different model.
+
+**How do evals and traces work in eve?**
+
+Each file in `evals/` that ends in `.eval.ts` defines evals with `defineEval`. An eval sends a message to the agent, checks the reply, and can ask a judge model to grade it with `t.judge`. The command `eve eval` runs the evals in parallel and writes results and a full trace for each eval to `.eve/evals/<timestamp>/`, with every model step, tool call, command and cost.
+
+**Are FinanceBench gold answers always correct?**
+
+No. In this project, an AI coding agent checked each failed question against its report and found 5 gold answers that contradict the report: an arithmetic error, an out-of-date fact, a reversed sign, a rounding error and a wrong conclusion. The corrections, with report line evidence, are in [`evals/data/gold-corrections.json`](https://github.com/satish860/financebench-eve/blob/master/evals/data/gold-corrections.json). No person has checked them yet.
+
+**Can you deploy an eve agent that uses a Docker sandbox to Vercel?**
+
+Not as it is. The Docker sandbox runs on a local computer. To deploy on Vercel, the agent must use the Vercel Sandbox instead. The eve framework is also in preview, and its documents say that the APIs can change before general availability.
+
+---
+
+*DeltaXY builds document intelligence for regulated industries — aviation leasing, financial compliance, legal tech. 10,000+ documents processed in production, 95% extraction accuracy. If you're wrestling with an AI document project and need someone who's actually shipped in production — I do consulting.*
+
+**[deltaxy.ai](https://deltaxy.ai)** · **[satish@deltaxy.ai](mailto:satish@deltaxy.ai)**
