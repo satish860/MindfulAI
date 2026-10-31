@@ -1,0 +1,332 @@
+---
+title: "Every agent should have a computer: building a $12/mo sandbox platform"
+date: "2026-10-31"
+excerpt: "Every agent needs its own computer — Claude, Perplexity, OpenAI, and Kimi all ship one. We ran ours on Azure's Code Interpreter, found the open source option didn't fit our scale, and built a $12/mo microVM sandbox platform instead: the steps, the traps, and the numbers."
+template: "technical"
+category: "AI Engineering"
+---
+
+*I kept hearing the theory. Then I built the smallest thing that proved it — and learned it one step at a time.*
+
+---
+
+Every agent should have a computer. I first read that sentence in E2B's marketing, and again last
+year in Cloudflare's *"Your agent needs a computer, not a container."* By now the market agrees:
+Claude ships one, Perplexity ships one, OpenAI ships one, Kimi ships one. Every major provider
+treats the agent's sandbox as a first-class feature, not a footnote. This post is what happened
+when I stopped reading the theory and tried to build one for myself: the journey, written as the
+steps I learned them.
+
+It assumes you ship agents and call APIs, but not that you've touched infrastructure: *rootfs*,
+*vsock*, *jailer*, and *nftables* get a plain explanation at first use, because they're the actual
+content. Every AI engineer will need a sandbox platform of their own — and a good one costs $12/mo
+and is easy to build. Follow the steps in order, or hand the spec at the end to a coding agent.
+
+## Why every agent needs its own computer
+
+We understood this the way most teams do: by deploying agents and watching them run into the two
+walls at once. Our users want results **faster** — and we have to **guarantee security**. Those two
+demands meet in the sandbox: run agents in parallel, each in an isolated environment, and you get
+speed without risk. Isolation is what makes parallelism safe; parallelism is what makes the
+isolation worth paying for.
+
+For a while we ran our agents on Azure's Code Interpreter. It worked — but **E2B** was much better
+at the job, and we never got the chance to use it. E2B is a service that hands each agent a
+disposable virtual machine on demand. The idea stayed in my head: *a computer per agent, not a
+container, not a function, a computer.* How hard can it really be to build?
+
+So I started looking for an open source option.
+
+## Perplexity Spaces was the turning point
+
+The search landed on **Perplexity Spaces** — open-sourced, Apache 2.0, built on **Firecracker**.
+Firecracker is Amazon's microVM engine: software that boots a tiny virtual machine
+in about 125 ms with about 5 MB of overhead. Spaces uses those microVMs to power Perplexity
+Computers.
+
+It felt like a great system, with the right building blocks: microVMs, templates, an API to create
+and destroy them. So I built it. Installed it, stood up the cluster, ran it.
+
+And then I found it's overengineered — for production at our scale, and for education alike. Spaces
+is a Kubernetes deployment (a system that runs and restarts many services across many machines):
+six node types (control-plane, sandbox workers, infra, builders), a dedicated builder pool, real
+S3-style snapshot transit, and roughly **54 always-on worker services** (nine DaemonSets across six
+nodes) even when nothing is running. Idle CPU sat near 190% on a 2-vCPU box. Postgres got
+OOM-killed at 2 GiB: under memory pressure, the kernel killed the biggest hog — the database. Every
+failure in my bring-up was a timeout, not an error. The thing was too big to fail fast, and too big
+to learn from.
+
+Still a great system. But do we need that complexity? Maybe for a Perplexity, serving millions of
+sessions — or for a provider whose users expect it always on. For the rest of us: no. It should be
+simple. And it is: break the thing open, keep the parts you need, and every AI engineer can run a
+sandbox platform for a few dollars a month.
+
+## The rebuild: minimal code, maximum value
+
+So as a learning, I created a simple system. One rule from the top of my roadmap:
+
+> Every story earns its place by being on the path to one working end-to-end run.
+> Anything not needed for that run is deferred, not built.
+
+That run is: **create a sandbox → run a command in it → collect the output → delete the sandbox.**
+Repeat 100× without leaking VMs, disk, or CPU. Everything else is on the cut line.
+
+A *sandbox* is our name for the disposable computer: an isolated microVM an agent works in, which
+can be destroyed when the job is done. The isolation part matters — that's Step 5.
+
+## The stack
+
+| Piece | Choice | Why |
+|---|---|---|
+| Control plane | **Rust (axum + tokio)** | HTTP + WebSocket + concurrency in one typed language, for the API we keep extending |
+| Guest daemon | **Go (static)** | One static binary that just sits in the rootfs — nothing to install at boot |
+| VM runtime | **Firecracker + jailer** | ~125 ms boot, ~5 MB overhead; jailer hands us the chroot jail for free |
+| Template store | Local `.ext4` images | No object storage needed at this scale |
+| Command streaming | WebSocket | Full-duplex; trivial for a harness to consume |
+| Isolation | Jailer chroot + cgroup v2 + nftables | The thin posture: public internet yes, host and peers no |
+
+Deployment: API and Firecracker on the same host. The API is the only thing allowed to talk to
+jailer, so moving the API to its own machine later is a transport change, not a redesign.
+
+## The steps, in the order I learned them
+
+These aren't project "epics" — they're the lessons in the order I had to learn them, and the order
+I'd teach. Each step has three parts: **the idea**, **the task**, and **the trap** that cost me
+time — or the moment it clicked.
+
+### Step 1 — Boot a tiny Linux
+
+**The idea.** A Linux system is two things. The **kernel** — the core of the OS: what talks to
+hardware and schedules programs. And the **rootfs** (root filesystem) — the files that make Linux
+*Linux*: commands, libraries, system files, all hanging off `/`. Kernel + rootfs = a bootable
+machine. You can carry a rootfs in a single file, a **disk image** — ours is **ext4**, which just
+names the filesystem format Linux writes to a drive. The image is a file that *acts like a whole
+hard drive*.
+
+**The task.** Pack Alpine minirootfs (a bare Alpine Linux, no installer) into a 64 MiB ext4 image,
+boot it under Firecracker, and watch the guest daemon come up inside. (Talking to it is Step 2.)
+
+**The trap.** Alpine's `/sbin/init` is a symlink to **busybox** — one binary that bundles most of
+the standard Unix tools. Fine for normal use; but under Firecracker, `/sbin/init` is the first
+process the kernel starts, and it must mount `/proc`, `/sys`, `/dev` and then exec the guest
+daemon. Busybox's init won't do that. Delete the symlink, write a real script. It sounds trivial;
+it silently ate a full evening.
+
+### Step 2 — Talk to it
+
+**The idea.** A microVM has no screen, no keyboard, no network. The way in is **vsock**: a virtual
+socket — a connection between host and guest provided by the virtualization layer itself, no
+physical network involved. Both ends need a program: inside the sandbox, the **guest daemon**
+(`guestd`, 129 lines of Go, compiled static so it drops into the image with nothing to install)
+listens; on the host, a small tool sends.
+
+**The task.** Send "run this command" from host to sandbox and get the output back — with zero API
+code, to prove the idea before building anything around it.
+
+**The trap.** Firecracker's vsock is **UDS-based**. UDS (*Unix Domain Socket*) means the host-side
+connection is a file: two programs on the same machine using a file as their channel. The host
+opens the socket file inside the jail and must first write a **handshake** — `connect <port>` —
+saying which guest port it wants. Every kernel-vsock tutorial assumes a plain network connection;
+nothing tells you about the file-based handshake. It cost me a full day.
+
+### Step 3 — Wrap it in an API
+
+**The idea.** The product is four endpoints: `POST /sandboxes`, `POST /sandboxes/{id}/command`,
+`DELETE /sandboxes/{id}`, `GET /sandboxes`. `POST /sandboxes` answers `201` with
+`{"sandbox_id": "...", "state": "running"}`; replay it with the same `Idempotency-Key` header
+and you get `200` with the existing sandbox instead of a second VM. The interesting choice is
+command streaming: output arrives over seconds in many chunks,
+and HTTP request/response doesn't carry that. So `/command` is a **WebSocket** — a persistent
+two-way connection the sandbox pushes output through live. Your agent just reads the stream.
+
+**The task.** Build the API in Rust (axum). Verify with a loop that runs create → command →
+delete **100 times** and counts leaked sandboxes.
+
+**The trap.** Don't try to stream over plain HTTP — you end up *polling* ("any output yet?"),
+which is slow and awkward to build on. Pick WebSocket from the start. And don't add a fifth
+endpoint; the rule says defer everything not needed for the run. The reward for restraint: 100
+runs, zero leaked VMs, and an API that is 768 lines of Rust.
+
+### Step 4 — One recipe, many computers
+
+**The idea.** Rebuilding a rootfs for every sandbox is slow and error-prone. A **template** is a
+named prebuilt base image; creating a sandbox from it is *cloning*: one publish, N identical
+computers.
+
+**The task.** Two templates: `seed` (Alpine + guest daemon) and `code-runtime` (seed plus Python
+and Node). In code, a template is a named `.ext4` file plus small metadata.
+
+**The click.** No trap here — that's the point. The hard work (booting, talking) happened once in
+the earlier steps, and everything after reuses it: that's what a good abstraction looks like. One
+thing to resist: stuffing every language into `seed`. Every byte in the base template is paid by
+every sandbox, forever.
+
+### Step 5 — Lock the doors
+
+**The idea.** Isolation is the security baseline: the sandbox reaches the public internet, but must
+*not* reach the host, the LAN, or other sandboxes. The thin posture, in our terms: public internet
+yes, host and peers no. Four tools do the sealing:
+
+- **Jailer** — Firecracker's built-in jail. **chroot** ("change root"): the sandbox's `/` is a
+  small folder inside the host's filesystem; from inside, the rest of the host doesn't exist.
+- **cgroup** — Linux's resource caps. Set `cpu.max` and `memory.max` and one misbehaving agent
+  burns its own quota, not the host's.
+- **TAP** — a virtual ethernet cable between host and sandbox; each sandbox gets its own.
+- **nftables** — the Linux firewall, our doorman: allow the sandbox's own subnet, drop **RFC1918**
+  (private ranges like 192.168.x.x and 10.x.x.x), drop the host's public IP, drop IPv6, accept
+  the rest. **NAT** masquerade on the way out gives the sandbox the host's public address, so
+  replies can route back.
+
+**The task.** Wire jailer + cgroup + TAP + nftables per sandbox and prove it: from inside, a
+public site answers `OK`; host and peer sandboxes answer `HOST_BLOCKED`.
+
+**The traps.** Two — and neither failure names its cause. Fresh DigitalOcean droplets ship with
+**ip_forward** off: the kernel setting that routes traffic between the host's networks. Off means
+every packet from a sandbox is silently dropped — no error, just nothing. And don't set
+Firecracker's `kill_on_drop` ("kill the VM when a packet is dropped"): a perfectly ordinary
+dropped packet will murder the sandbox as it boots.
+
+### Step 6 — Make it repeatable
+
+**The idea.** A create → run → delete loop is only trustworthy when it replays cleanly: run it
+twice, one run's worth of residue. The tools:
+
+- **state.json** — one file on the host recording what exists right now: sandbox IDs, status,
+  template. The ledger; the platform reads it to know reality.
+- **Idempotency** — same action twice, same result: create with a key returns the existing
+  sandbox on retry; deleting something already gone is a success. What makes replays safe.
+- **Delete-on-disconnect** — if the client's connection drops, the sandbox deletes itself. A
+  vanished agent leaves no running VM behind.
+- **The sweeper** — a background job that deletes sandboxes that shouldn't exist. The safety
+  valve for every bug we haven't found yet.
+
+**The task.** A harness: a script that treats the API like a real client and runs the loop
+unattended, watching for leaks. This is how you verify "create → run → collect → delete" honestly.
+
+**The trap.** The success signal. "The command finished" is not enough — wait for the *process* to
+exit inside the sandbox (`process_exited`) before collecting output and deleting. Signal on "did the
+sandbox finish its job", not "did we send a command", or the loop leaks. Two unattended 20-run
+waves: **20/20 ok, zero leaks, ~3.2 s per run, ~$0.00015 per wave.**
+
+### Step 7 — Keep an eye on it (and the bill)
+
+**The idea.** Three habits:
+
+- **/healthz** — the "are you alive?" endpoint: uptime, sandbox counts. Poll it every minute.
+- **Structured logs** — every lifecycle event (created, ran, deleted, error) as one searchable
+  line with fields.
+- **Budget tripwire** — the cost guardrail. DigitalOcean has no API for spend alerts, so the
+  tripwire is a **cron job** (a command the system runs on a schedule) that reads
+  `GET /v2/customers/my/balance` and warns at the cap. A tripwire doesn't stop the spend; it makes
+  sure you hear about it the moment it crosses the line.
+
+**The trap.** Cron jobs fail silently: if the cron never runs, the warning never fires, and you
+find out when the invoice arrives. Test it — set the cap to a cent, run the job, watch it warn.
+Then set it back.
+
+## The numbers that matter
+
+Measured, not guessed:
+
+| Metric | Value |
+|---|---|
+| One seed sandbox (the whole VM) | **~63 MB RSS** (resident set size — memory actually in use) |
+| Boot + command + delete, end to end | **~3.2 s/run** |
+| Marginal cost per 20-run wave | **~$0.00015** |
+| 100-run API acceptance | zero leaks |
+| Idle host, after removing dead weight | **~333 MiB** |
+| Monthly cost | **$12** |
+
+## The cost lesson
+
+The original droplet was $24/mo because it carried ~838 MB of software our platform never used:
+k3s (559 MB), dockerd (83 MB), containerd (64 MB) — leftovers from the Kubernetes attempt. Removing
+them freed ~800 MB of RAM and **37 GB of disk** (17 GB of kind cluster data, 22 GB of container
+image stores). Then I moved to a smaller droplet: $12/mo, still 2 GiB RAM, plenty for two
+sandboxes.
+
+The lesson is not "Kubernetes is bad." It's that **complexity has a monthly price**, and the price
+was hidden inside a box we didn't need to run.
+
+## Do you need Kubernetes?
+
+No — and this is the part that surprised me. When you parallelize across servers, you need an
+**orchestrator** (software that decides what runs where and keeps it that way) and a
+**desired-state** loop: the orchestrator keeps asking "what should exist? what exists?" and closes
+the gap. Kubernetes is the famous orchestrator, with machinery like **etcd** — a shared database the
+cluster agrees through. Needed at big scale. Overkill here.
+
+The platform already *is* a minimal orchestrator: `state.json` is the desired-state table, the API
+is the **reconciler** (the loop that creates what's missing and deletes what's done), idempotency
+keys make replays safe, the sweeper is the safety valve. Scaling to many boxes is a registry
+(task → host) plus a scheduler — not a control plane with etcd.
+
+## Build it yourself
+
+On a DigitalOcean droplet (any Basic plan with **KVM** — the hardware virtualisation support that
+makes fast VMs possible; even the $4/mo one boots Firecracker, I use `s-1vcpu-2gb` for headroom):
+
+```bash
+# 1. Verify virtualization
+ls /dev/kvm                      # must exist — /dev/kvm is the door to KVM
+
+# 2. System prep — two silent killers
+apt-get install -y nftables curl
+echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-space.conf && sysctl -w net.ipv4.ip_forward=1
+# ip_forward off = sandbox traffic silently dropped (Step 5).
+
+# 3. Firecracker vendor (binary + kernel)
+mkdir -p /opt/space/vendor/firecracker/v1.15.1/{bin,kernel}
+# download firecracker + jailer to bin/, vmlinux.bin to kernel/
+# vmlinux.bin is the Linux kernel as a single bootable file.
+
+# 4. Seed rootfs: Alpine minirootfs -> 64 MiB ext4, with a static guestd inside
+#    and /sbin/init replaced by a real script (Step 1's trap).
+
+# 5. Per-sandbox network (net-setup.sh):
+#    ip tuntap add tap-<id10> mode tap
+#    nft: nat masquerade on eth0; forward chain per sandbox (a chain is a
+#    named list of rules, checked top to bottom):
+#      allow own subnet, drop RFC1918, drop host public IP, drop IPv6, accept
+#    (chain names unquoted, e.g. sbx1 — nft parses in order)
+
+# 6. Boot with jailer, no kill_on_drop:
+#    jailer --id <id> --exec-file firecracker --uid 0 --gid 0 \
+#      --chroot-base-dir /root/mvp/jail -- --config-file /fc-config.json
+#    vsock: {"guest_cid":3,"uds_path":"/v.sock"} — host writes "connect 9000\n" first.
+
+# 7. Rust API (axum). Note: route params are :id, not {id} in axum 0.7.
+
+# 8. Smoke test
+curl -s -X POST http://127.0.0.1:8080/sandboxes -d '{"template":"seed","vcpu":1,"memory_mib":1024}'
+```
+
+That last line is the payoff of Step 3: create a sandbox with a single request.
+
+The API is 768 lines of Rust. The guest daemon is 129 lines of Go. The whole platform — network
+setup and harness included — is about 1,200 lines.
+
+## Give this to a coding agent
+
+If you'd rather a coding agent build it, hand it this spec — it's self-contained:
+
+> Build a minimal agent-sandbox platform: an HTTP API that boots isolated microVMs, runs commands in
+> them, streams output, and deletes them. Rust control plane (axum), Go guest daemon, Firecracker +
+> jailer, cgroup v2 + nftables isolation. One vertical slice must work end to end: create → run →
+> collect → delete, repeated 100× with zero leaked VMs, taps, or nft rules. Templates are local
+> `.ext4` images (seed = Alpine + daemon; code-runtime = + Python/Node). Store run records in
+> `state.json` with idempotency keys. Expose `/healthz` with uptime + counts. Budget guardrail: cron
+> job reading `GET /v2/customers/my/balance`, warn at the spend cap. Constraint: minimal code,
+> maximum value — anything not needed for that one run is cut. Known traps: Firecracker vsock is
+> UDS-based (write `connect <port>\n`); replace Alpine's busybox `/sbin/init`; busybox has no `ip`
+> applet (use ifconfig + route); nft chain names must be unquoted; tap names ≤15 chars; enable
+> `net.ipv4.ip_forward`; do not set `kill_on_drop` or the VM dies on create.
+
+## The closing thought
+
+Perplexity Spaces is a genuinely good system — for Perplexity. I learned more from its complexity
+than from anything that went right. But the lesson I'm keeping is the roadmap's first line: *minimal
+code, maximum value.*
+
+Every agent should have a computer. And now I know exactly how much one costs: a $12 droplet, a
+static Go binary, a Rust API, and one vertical slice done properly.
